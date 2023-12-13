@@ -2675,6 +2675,7 @@ primary:  primary_literal
 	| '(' mintypmax_expression ')'
 		{ $$ = $2; }
         | TOK_NULL { init($$, ID_NULL); }
+        | TOK_THIS { init($$, ID_this); }
 	;
 
 primary_literal:
