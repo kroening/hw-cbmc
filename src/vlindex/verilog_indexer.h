@@ -41,6 +41,7 @@ public:
       UDP,
       INTERFACE,
       CLASS,
+      CONFIG,
       TYPEDEF,
       FUNCTION,
       TASK,
@@ -106,6 +107,7 @@ public:
   // statistics
   std::map<idt::kindt, std::size_t> total_number_of() const;
   std::size_t total_number_of_files() const;
+  std::size_t total_number_of_symlinked_files() const;
   std::size_t total_number_of_lines() const;
 
 protected:

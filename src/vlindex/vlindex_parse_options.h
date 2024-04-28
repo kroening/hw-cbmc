@@ -23,8 +23,9 @@ public:
   vlindex_parse_optionst(int argc, const char **argv)
     : parse_options_baset(
         "(top)"
-        "(modules)(module-hierarchy)"
-        "(packages)(classes)(interfaces)(udps)"
+        "(module-hierarchy)"
+        "(modules)(packages)(classes)(interfaces)(udps)"
+        "(symlinks)(files)"
         "(1800-2017)(1800-2012)(1800-2009)(1800-2005)"
         "(1364-2005)(1364-2001)(1364-2001-noconfig)(1364-1995)"
         "I:(preprocess)",
