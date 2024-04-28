@@ -439,7 +439,9 @@ void verilog_indexer_parsert::rItem()
   else if(
     token == TOK_FUNCTION || token == TOK_TASK || token == TOK_VIRTUAL ||
     token == TOK_EXTERN)
+  {
     rTaskFunction();
+  }
   else if(token == TOK_CONSTRAINT)
     rConstraint();
   else if(token == TOK_ASSIGN)
@@ -1056,6 +1058,21 @@ void verilog_indexer_parsert::rTaskFunction()
   rTypeOpt();
 
   auto name = next_token(); // name or new
+
+  {
+    idt id;
+
+    if(tf_keyword == TOK_FUNCTION)
+      id.kind = idt::FUNCTION;
+    else
+      id.kind = idt::TASK;
+
+    id.name = name.text;
+    id.module = current_module;
+    id.file_name = verilog_parser.get_file();
+    id.line_number = verilog_parser.get_line_no();
+    indexer.add(std::move(id));
+  }
 
   if(tf_keyword == TOK_FUNCTION)
     skip_until(TOK_ENDFUNCTION);
