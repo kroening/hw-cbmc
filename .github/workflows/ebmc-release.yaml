@@ -45,7 +45,7 @@ jobs:
           prerelease: false
 
   ubuntu-22_04-package:
-    name: Package for Ubuntu 22.04
+    name: Package .deb
     runs-on: ubuntu-22.04
     needs: [perform-draft-release]
     outputs:
@@ -104,7 +104,7 @@ jobs:
           dpkg-deb -Zxz -b ebmc-${VERSION}
           deb_package_name="$(ls *.deb)"
           echo "deb_package_path=$PWD/$deb_package_name" >> $GITHUB_OUTPUT
-          echo "deb_package_name=ubuntu-22.04-$deb_package_name" >> $GITHUB_OUTPUT
+          echo "deb_package_name=$deb_package_name" >> $GITHUB_OUTPUT
       - name: Upload binary packages
         uses: actions/upload-release-asset@v1
         env:
@@ -116,7 +116,7 @@ jobs:
           asset_content_type: application/x-deb
 
   centos8-package:
-    name: Package for CentOS 8
+    name: Package .rpm
     runs-on: ubuntu-22.04
     needs: [perform-draft-release]
     outputs:
