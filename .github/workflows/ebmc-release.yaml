@@ -72,7 +72,7 @@ jobs:
       - name: Get minisat
         run: make -C lib/cbmc/src minisat2-download
       - name: Build with make
-        run: make -C src -j4 CXX="ccache g++"
+        run: make -C src -j4 CXX="ccache g++" LINKFLAGS="-static-libstdc++"
       - name: Run the ebmc tests with SAT
         run: make -C regression/ebmc test
       - name: Run the verilog tests
@@ -196,7 +196,7 @@ jobs:
           (cd ~/rpmbuild/SPECS ; rpmbuild -v -bb ebmc.spec )
           rpm_package_name=ebmc-${VERSION}-1.x86_64.rpm
           echo "rpm_package_path=$HOME/rpmbuild/RPMS/x86_64/$rpm_package_name" >> $GITHUB_OUTPUT
-          echo "rpm_package_name=centos8-$rpm_package_name" >> $GITHUB_OUTPUT
+          echo "rpm_package_name=$rpm_package_name" >> $GITHUB_OUTPUT
       - name: Upload binary packages
         uses: actions/upload-release-asset@v1
         env:
@@ -228,9 +228,10 @@ jobs:
           dpkg -i ${{ needs.ubuntu-22_04-package.outputs.deb_package_name }}
           \`\`\`
 
-          ## CentOS
+          ## Red Hat Linux and derivates
+          ## (CentOS, Fedora, Amazon Linux)
 
-          On CentOS, install EBMC by downloading the *.rpm package below for your version of CentOS and install with
+          Install EBMC by downloading the *.rpm package below and install with
 
           \`\`\`sh
           rpm -i ${{ needs.centos8-package.outputs.rpm_package_name }}
