@@ -224,16 +224,16 @@ jobs:
 
           On Ubuntu, install EBMC by downloading the *.deb package below for your version of Ubuntu and install with
 
-          ```sh
+          \`\`\`sh
           dpkg -i ${{ needs.ubuntu-22_04-package.outputs.deb_package_name }}
-          ```
+          \`\`\`
 
           ## CentOS
 
           On CentOS, install EBMC by downloading the *.rpm package below for your version of CentOS and install with
 
-          ```sh
+          \`\`\`sh
           rpm -i ${{ needs.centos8-package.outputs.rpm_package_name }}
-          ```
+          \`\`\`
           EOM
           gh release edit ebmc-${{ env.EBMC_VERSION }} --repo ${{ github.repository }} --draft=false --notes-file body
