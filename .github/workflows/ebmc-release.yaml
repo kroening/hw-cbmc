@@ -64,9 +64,7 @@ jobs:
           save-always: true
           path: .ccache
           key: ${{ runner.os }}-22.04-make-gcc-${{ github.ref }}-${{ github.sha }}-PR
-          restore-keys: |
-            ${{ runner.os }}-22.04-make-gcc-${{ github.ref }}
-            ${{ runner.os }}-22.04-make-gcc
+          restore-keys: ${{ runner.os }}-22.04-make-gcc
       - name: ccache environment
         run: |
           echo "CCACHE_BASEDIR=$PWD" >> $GITHUB_ENV
