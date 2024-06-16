@@ -105,9 +105,6 @@ jobs:
           deb_package_name="$(ls *.deb)"
           echo "deb_package_path=$PWD/$deb_package_name" >> $GITHUB_OUTPUT
           echo "deb_package_name=$deb_package_name" >> $GITHUB_OUTPUT
-          echo ASSET_PATH: $PWD/$deb_package_name
-          ls -la $PWD/$deb_package_name
-          echo $PWD/$deb_package_name
       - name: Upload binary packages
         uses: actions/upload-release-asset@v1
         env:
