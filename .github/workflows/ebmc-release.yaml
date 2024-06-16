@@ -100,7 +100,8 @@ jobs:
           Description: The EBMC Model Checker
           EOM
           sudo chown root:root -R ebmc-${VERSION}
-          dpkg -b ebmc-${VERSION}
+          # we give -Zxz since older Debian versions do not uncompress zstd
+          dpkg-deb -Zxz -b ebmc-${VERSION}
           deb_package_name="$(ls *.deb)"
           echo "deb_package_path=$PWD/$deb_package_name" >> $GITHUB_OUTPUT
           echo "deb_package_name=ubuntu-22.04-$deb_package_name" >> $GITHUB_OUTPUT
