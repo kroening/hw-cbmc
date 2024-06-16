@@ -145,7 +145,7 @@ jobs:
       - name: Get minisat
         run: make -C lib/cbmc/src minisat2-download
       - name: Build with make
-        run: make CXX="ccache g++ -Wno-class-memaccess" LIBS="-lstdc++fs" -C src -j4
+        run: make CXX="ccache g++ -Wno-class-memaccess" LIBS="-lstdc++fs" LINKFLAGS="-static-libstdc++" -C src -j4
       - name: Print ccache stats
         run: ccache -s
       - name: Run the ebmc tests with SAT
