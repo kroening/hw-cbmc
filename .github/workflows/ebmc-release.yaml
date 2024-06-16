@@ -124,10 +124,12 @@ jobs:
       - name: Install Packages
         run: |
           sed -i -e "s|mirrorlist=|#mirrorlist=|g" -e "s|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g" /etc/yum.repos.d/CentOS-Linux-*
+          yum install -y dnf-plugins-core
+          yum config-manager --set-enabled powertools
           yum -y install make gcc-c++ flex bison git rpmdevtools wget libstdc++-static
-          wget --no-verbose https://github.com/ccache/ccache/releases/download/v4.8.3/ccache-4.8.3-linux-x86_64.tar.xz
-          tar xJf ccache-4.8.3-linux-x86_64.tar.xz
-          cp ccache-4.8.3-linux-x86_64/ccache /usr/bin/
+          wget --no-verbose https://github.com/ccache/ccache/releases/download/v4.9.1/ccache-4.9.1-linux-x86_64.tar.xz
+          tar xJf ccache-4.9.1-linux-x86_64.tar.xz
+          cp ccache-4.9.1-linux-x86_64/ccache /usr/bin/
       - name: cache for ccache
         uses: actions/cache@v4
         with:
