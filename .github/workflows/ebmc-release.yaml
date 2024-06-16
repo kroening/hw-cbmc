@@ -72,7 +72,9 @@ jobs:
       - name: Get minisat
         run: make -C lib/cbmc/src minisat2-download
       - name: Build with make
-        run: make -C src -j4 CXX="ccache g++" LINKFLAGS="-static-libstdc++"
+        run: |
+          # -static-libstdc++ is insufficient, owing to varying GLIBC versions
+          make -C src -j4 CXX="ccache g++" LINKFLAGS="-static"
       - name: Run the ebmc tests with SAT
         run: make -C regression/ebmc test
       - name: Run the verilog tests
@@ -147,7 +149,9 @@ jobs:
       - name: Get minisat
         run: make -C lib/cbmc/src minisat2-download
       - name: Build with make
-        run: make CXX="ccache g++ -Wno-class-memaccess" LIBS="-lstdc++fs" LINKFLAGS="-static-libstdc++" -C src -j4
+        run: |
+          # -static-libstdc++ suffices -- tested on CentOS, Fedora, Amazon Linux
+          make CXX="ccache g++ -Wno-class-memaccess" LIBS="-lstdc++fs" LINKFLAGS="-static-libstdc++" -C src -j4
       - name: Print ccache stats
         run: ccache -s
       - name: Run the ebmc tests with SAT
