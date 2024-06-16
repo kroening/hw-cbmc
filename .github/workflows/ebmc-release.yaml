@@ -217,7 +217,7 @@ jobs:
           EBMC_VERSION: ${{ needs.get-version-information.outputs.version }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cat > body << EOM
+          cat << EOM > body
           This is EBMC version ${{ env.EBMC_VERSION }}.
 
           ## Ubuntu
@@ -236,4 +236,4 @@ jobs:
           rpm -i ${{ needs.centos8-package.outputs.rpm_package_name }}
           ```
           EOM
-          gh release edit ebmc-${{ env.EBMC_VERSION }} --draft=false --notes-file body
+          gh release edit ebmc-${{ env.EBMC_VERSION }} --repo ${{ github.repository }} --draft=false --notes-file body
