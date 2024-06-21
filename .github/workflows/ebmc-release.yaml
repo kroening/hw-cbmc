@@ -45,7 +45,7 @@ jobs:
           prerelease: false
 
   ubuntu-22_04-package:
-    name: Package .deb
+    name: Package amd64 .deb
     runs-on: ubuntu-22.04
     needs: [perform-draft-release]
     outputs:
@@ -85,11 +85,11 @@ jobs:
         id: create_packages
         run: |
           VERSION=$(echo ${{ github.ref }} | cut -d "/" -f 3 | cut -d "-" -f 2)
-          mkdir -p ebmc-${VERSION}/DEBIAN
-          mkdir -p ebmc-${VERSION}/usr/bin
-          cp src/ebmc/ebmc ebmc-${VERSION}/usr/bin
-          strip ebmc-${VERSION}/usr/bin/ebmc
-          cat << EOM > ebmc-${VERSION}/DEBIAN/control
+          mkdir -p ebmc_${VERSION}_amd64/DEBIAN
+          mkdir -p ebmc_${VERSION}_amd64/usr/bin
+          cp src/ebmc/ebmc ebmc_${VERSION}_amd64/usr/bin
+          strip ebmc_${VERSION}_amd64/usr/bin/ebmc
+          cat << EOM > ebmc_${VERSION}_amd64/DEBIAN/control
           Package: ebmc
           Version: ${VERSION}
           Architecture: amd64
@@ -101,7 +101,7 @@ jobs:
           EOM
           sudo chown root:root -R ebmc-${VERSION}
           # we give -Zxz since older Debian versions do not uncompress zstd
-          dpkg-deb -Zxz -b ebmc-${VERSION}
+          dpkg-deb -Zxz -b ebmc_${VERSION}_amd64
           deb_package_name="$(ls *.deb)"
           echo "deb_package_path=$PWD/$deb_package_name" >> $GITHUB_OUTPUT
           echo "deb_package_name=$deb_package_name" >> $GITHUB_OUTPUT
