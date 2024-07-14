@@ -216,6 +216,9 @@ jobs:
   wasm-package:
     name: Package wasm
     runs-on: ubuntu-24.04
+    needs: [perform-draft-release]
+    outputs:
+      wasm_package_name: ${{ steps.create_packages.outputs.wasm_package_name }}
     steps:
       - uses: actions/checkout@v4
         with:
