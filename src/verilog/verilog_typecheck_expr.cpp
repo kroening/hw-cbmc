@@ -318,6 +318,20 @@ exprt verilog_typecheck_exprt::convert_expr_rec(exprt expr)
   {
     return convert_expr_function_call(to_function_call_expr(expr));
   }
+  else if(expr.id() == ID_verilog_assignment_pattern)
+  {
+    // multi-ary -- may become a struct or array, depending
+    // on context.
+    for(auto &op : expr.operands())
+      convert_expr(op);
+
+    // Typechecking can only be completed once we know the type
+    // from the usage context. We record "verilog_assignment_pattern"
+    // to signal that.
+    expr.type() = typet(ID_verilog_assignment_pattern);
+
+    return expr;
+  }
   else
   {
     std::size_t no_op;
@@ -434,7 +448,7 @@ Function: verilog_typecheck_exprt::bits
 
 exprt verilog_typecheck_exprt::bits(const exprt &expr)
 {
-  auto width_opt = bits_rec(expr.type());
+  auto width_opt = get_width_opt(expr.type());
 
   if(!width_opt.has_value())
   {
@@ -447,7 +461,7 @@ exprt verilog_typecheck_exprt::bits(const exprt &expr)
 
 /*******************************************************************\
 
-Function: verilog_typecheck_exprt::bits_rec
+Function: verilog_typecheck_exprt::left
 
   Inputs:
 
@@ -457,43 +471,169 @@ Function: verilog_typecheck_exprt::bits_rec
 
 \*******************************************************************/
 
-std::optional<mp_integer>
-verilog_typecheck_exprt::bits_rec(const typet &type) const
+constant_exprt verilog_typecheck_exprt::left(const exprt &expr)
 {
-  if(type.id() == ID_bool)
-    return 1;
-  else if(type.id() == ID_unsignedbv)
-    return to_unsignedbv_type(type).get_width();
-  else if(type.id() == ID_signedbv)
-    return to_signedbv_type(type).get_width();
-  else if(type.id() == ID_integer)
-    return 32;
-  else if(type.id() == ID_array)
-  {
-    auto &array_type = to_array_type(type);
-    auto size_int =
-      numeric_cast_v<mp_integer>(to_constant_expr(array_type.size()));
-    auto element_bits_opt = bits_rec(array_type.element_type());
-    if(element_bits_opt.has_value())
-      return element_bits_opt.value() * size_int;
-    else
-      return {};
-  }
-  else if(type.id() == ID_struct)
-  {
-    auto &struct_type = to_struct_type(type);
-    mp_integer sum = 0;
-    for(auto &component : struct_type.components())
+  // unpacked array: left bound
+  // packed array: index of most significant element
+  // 0 otherwise
+  auto left = [](const typet &type) -> mp_integer {
+    if(
+      type.id() == ID_unsignedbv || type.id() == ID_signedbv ||
+      type.id() == ID_verilog_unsignedbv || type.id() == ID_verilog_signedbv ||
+      type.id() == ID_bool)
     {
-      auto component_bits_opt = bits_rec(component.type());
-      if(!component_bits_opt.has_value())
-        return component_bits_opt.value();
-      sum += component_bits_opt.value();
+      auto offset = type.get_int(ID_C_offset);
+      if(type.get_bool(ID_C_big_endian))
+        return offset;
+      else
+        return offset + get_width(type) - 1;
     }
-    return sum;
-  }
+    else if(type.id() == ID_array)
+    {
+      auto offset = numeric_cast_v<mp_integer>(
+        to_constant_expr(static_cast<const exprt &>(type.find(ID_offset))));
+      if(type.get_bool(ID_C_big_endian))
+        return offset;
+      else
+      {
+        return offset +
+               numeric_cast_v<mp_integer>(
+                 to_constant_expr(to_array_type(type).size())) -
+               1;
+      }
+    }
+    else
+      return 0;
+  };
+
+  return from_integer(left(expr.type()), integer_typet{});
+}
+
+/*******************************************************************\
+
+Function: verilog_typecheck_exprt::right
+
+  Inputs:
+
+ Outputs:
+
+ Purpose:
+
+\*******************************************************************/
+
+constant_exprt verilog_typecheck_exprt::right(const exprt &expr)
+{
+  // unpacked array: right bound
+  // packed array: index of least significant element
+  // 0 otherwise
+  auto right = [](const typet &type) -> mp_integer {
+    if(
+      type.id() == ID_unsignedbv || type.id() == ID_signedbv ||
+      type.id() == ID_verilog_unsignedbv || type.id() == ID_verilog_signedbv ||
+      type.id() == ID_bool)
+    {
+      auto offset = type.get_int(ID_C_offset);
+      if(type.get_bool(ID_C_big_endian))
+        return offset + get_width(type) - 1;
+      else
+        return offset;
+    }
+    else if(type.id() == ID_array)
+    {
+      auto offset = numeric_cast_v<mp_integer>(
+        to_constant_expr(static_cast<const exprt &>(type.find(ID_offset))));
+      if(type.get_bool(ID_C_big_endian))
+      {
+        return offset +
+               numeric_cast_v<mp_integer>(
+                 to_constant_expr(to_array_type(type).size())) -
+               1;
+      }
+      else
+        return offset;
+    }
+    else
+      return 0;
+  };
+
+  return from_integer(right(expr.type()), integer_typet{});
+}
+
+/*******************************************************************\
+
+Function: verilog_typecheck_exprt::increment
+
+  Inputs:
+
+ Outputs:
+
+ Purpose:
+
+\*******************************************************************/
+
+constant_exprt verilog_typecheck_exprt::increment(const exprt &expr)
+{
+  // fixed-size dimension: 1 if $left >= $right, -1 otherwise
+  auto increment = [](const typet &type) -> mp_integer {
+    if(
+      type.id() == ID_unsignedbv || type.id() == ID_signedbv ||
+      type.id() == ID_verilog_unsignedbv || type.id() == ID_verilog_signedbv ||
+      type.id() == ID_array)
+    {
+      if(type.get_bool(ID_C_big_endian))
+        return -1;
+      else
+        return 1;
+    }
+    else
+      return -1;
+  };
+
+  return from_integer(increment(expr.type()), integer_typet{});
+}
+
+/*******************************************************************\
+
+Function: verilog_typecheck_exprt::low
+
+  Inputs:
+
+ Outputs:
+
+ Purpose:
+
+\*******************************************************************/
+
+constant_exprt verilog_typecheck_exprt::low(const exprt &expr)
+{
+  // $left if $increment returns –1
+  // $right otherwise
+  if(numeric_cast_v<mp_integer>(increment(expr)) == -1)
+    return left(expr);
   else
-    return {};
+    return right(expr);
+}
+
+/*******************************************************************\
+
+Function: verilog_typecheck_exprt::high
+
+  Inputs:
+
+ Outputs:
+
+ Purpose:
+
+\*******************************************************************/
+
+constant_exprt verilog_typecheck_exprt::high(const exprt &expr)
+{
+  // $right if $increment returns –1
+  // $left otherwise
+  if(numeric_cast_v<mp_integer>(increment(expr)) == -1)
+    return right(expr);
+  else
+    return left(expr);
 }
 
 /*******************************************************************\
@@ -600,12 +740,14 @@ exprt verilog_typecheck_exprt::convert_system_function(
     expr.type() = arguments.front().type();
     return std::move(expr);
   }
-  else if(identifier == "$bits")
+  else if(
+    identifier == "$bits" || identifier == "$left" || identifier == "$right" ||
+    identifier == "$increment" || identifier == "$low" || identifier == "$high")
   {
     if(arguments.size() != 1)
     {
       throw errort().with_location(expr.source_location())
-        << "$bits takes one argument";
+        << identifier << " takes one argument";
     }
 
     // The return type is integer.
@@ -1192,9 +1334,8 @@ exprt verilog_typecheck_exprt::convert_constant(constant_exprt expr)
       expr.type()=verilog_signedbv_typet(bits);
     else
       expr.type()=verilog_unsignedbv_typet(bits);
-    
+
     expr.set(ID_value, fvalue);
-    expr.set(ID_C_little_endian, true);
   }
   else
   {
@@ -1213,7 +1354,6 @@ exprt verilog_typecheck_exprt::convert_constant(constant_exprt expr)
       expr.type()=unsignedbv_typet(bits);
 
     expr.set(ID_value, integer2bvrep(int_value, bits));
-    expr.set(ID_C_little_endian, true);
   }
 
   return std::move(expr);
@@ -1421,6 +1561,31 @@ exprt verilog_typecheck_exprt::elaborate_constant_system_function_call(
     DATA_INVARIANT(arguments.size() == 1, "$bits has one argument");
     return bits(arguments[0]);
   }
+  else if(identifier == "$low")
+  {
+    DATA_INVARIANT(arguments.size() == 1, "$low has one argument");
+    return low(arguments[0]);
+  }
+  else if(identifier == "$high")
+  {
+    DATA_INVARIANT(arguments.size() == 1, "$high has one argument");
+    return high(arguments[0]);
+  }
+  else if(identifier == "$left")
+  {
+    DATA_INVARIANT(arguments.size() == 1, "$left has one argument");
+    return left(arguments[0]);
+  }
+  else if(identifier == "$right")
+  {
+    DATA_INVARIANT(arguments.size() == 1, "$right has one argument");
+    return right(arguments[0]);
+  }
+  else if(identifier == "$increment")
+  {
+    DATA_INVARIANT(arguments.size() == 1, "$increment has one argument");
+    return increment(arguments[0]);
+  }
   else if(identifier == "$clog2")
   {
     // the ceiling of the log with base 2 of the argument
@@ -1470,26 +1635,46 @@ bool verilog_typecheck_exprt::is_constant_expression(
   exprt tmp(expr);
 
   convert_expr(tmp);
-  ns.follow_macros(tmp);
 
-  simplify(tmp, ns);
+  auto integer_opt = is_constant_integer_post_convert(tmp);
+  if(integer_opt.has_value())
+  {
+    value = integer_opt.value();
+    return true;
+  }
+  else
+    return false;
+}
+
+/*******************************************************************\
+
+Function: verilog_typecheck_exprt::is_constant_integer_post_convert
+
+  Inputs:
+
+ Outputs:
+
+ Purpose:
+
+\*******************************************************************/
+
+std::optional<mp_integer>
+verilog_typecheck_exprt::is_constant_integer_post_convert(const exprt &expr)
+{
+  exprt tmp = expr;
+
+  ns.follow_macros(tmp);
+  tmp = simplify_expr(tmp, ns);
+
+  if(!tmp.is_constant())
+    return {};
 
   if(tmp.is_true())
-  {
-    value=1;
-    return true;
-  }
+    return 1;
   else if(tmp.is_false())
-  {
-    value=0;
-    return true;
-  }
-  else if(!to_integer_non_constant(tmp, value))
-  {
-    return true;
-  }
-
-  return false;
+    return 0;
+  else
+    return numeric_cast<mp_integer>(to_constant_expr(tmp));
 }
 
 /*******************************************************************\
@@ -1604,7 +1789,7 @@ void verilog_typecheck_exprt::implicit_typecast(
       {
         const std::string &value=expr.get_string(ID_value);
         // least significant bit is last
-        assert(value.size()!=0);
+        DATA_INVARIANT(value.size() != 0, "no empty bitvector");
         expr = make_boolean_expr(value[value.size() - 1] == '1');
         return;
       }
@@ -1644,16 +1829,17 @@ void verilog_typecheck_exprt::implicit_typecast(
       expr = typecast_exprt{expr, dest_type};
       return;
     }
-    else if(dest_type.id() == ID_struct)
+    else if(dest_type.id() == ID_struct || dest_type.id() == ID_union)
     {
-      // bit-vectors can be converted to packed structs
+      // bit-vectors can be converted to
+      // packed structs and packed unions
       expr = typecast_exprt{expr, dest_type};
       return;
     }
   }
-  else if(src_type.id() == ID_struct)
+  else if(src_type.id() == ID_struct || src_type.id() == ID_union)
   {
-    // packed structs can be converted to bits
+    // packed structs and packed unions can be converted to bits
     if(
       dest_type.id() == ID_bool || dest_type.id() == ID_unsignedbv ||
       dest_type.id() == ID_signedbv ||
@@ -1662,6 +1848,64 @@ void verilog_typecheck_exprt::implicit_typecast(
     {
       expr = typecast_exprt{expr, dest_type};
       return;
+    }
+  }
+  else if(src_type.id() == ID_verilog_assignment_pattern)
+  {
+    DATA_INVARIANT(
+      expr.id() == ID_verilog_assignment_pattern,
+      "verilog_assignment_pattern expression expected");
+    if(dest_type.id() == ID_struct)
+    {
+      auto &struct_type = to_struct_type(dest_type);
+      auto &components = struct_type.components();
+
+      if(expr.operands().size() != components.size())
+      {
+        throw errort().with_location(expr.source_location())
+          << "number of expressions does not match number of struct members";
+      }
+
+      for(std::size_t i = 0; i < components.size(); i++)
+      {
+        // rec. call
+        implicit_typecast(expr.operands()[i], components[i].type());
+      }
+
+      // turn into struct expression
+      expr.id(ID_struct);
+      expr.type() = dest_type;
+      return;
+    }
+    else if(dest_type.id() == ID_array)
+    {
+      auto &array_type = to_array_type(dest_type);
+      auto &element_type = array_type.element_type();
+      auto array_size =
+        numeric_cast_v<mp_integer>(to_constant_expr(array_type.size()));
+
+      if(array_size != expr.operands().size())
+      {
+        throw errort().with_location(expr.source_location())
+          << "number of expressions does not match number of array elements";
+      }
+
+      for(std::size_t i = 0; i < array_size; i++)
+      {
+        // rec. call
+        implicit_typecast(expr.operands()[i], element_type);
+      }
+
+      // turn into array expression
+      expr.id(ID_array);
+      expr.type() = dest_type;
+      return;
+    }
+    else
+    {
+      throw errort().with_location(expr.source_location())
+        << "cannot convert assignment pattern to '" << to_string(dest_type)
+        << '\'';
     }
   }
 
@@ -1910,7 +2154,6 @@ exprt verilog_typecheck_exprt::convert_unary_expr(unary_exprt expr)
     expr.id() == ID_sva_cycle_delay_star || expr.id() == ID_sva_weak ||
     expr.id() == ID_sva_strong)
   {
-    assert(expr.operands().size()==1);
     convert_expr(expr.op());
     make_boolean(expr.op());
     expr.type()=bool_typet();
@@ -1966,8 +2209,9 @@ exprt verilog_typecheck_exprt::convert_bit_select_expr(binary_exprt expr)
   // Verilog's bit select expression may map onto an extractbit
   // or an array index expression, depending on the type of the first
   // operand.
-  exprt &op0 = expr.op0();
+  exprt &op0 = expr.op0(), &op1 = expr.op1();
   convert_expr(op0);
+  convert_expr(op1);
 
   if(op0.type().id() == ID_verilog_real)
   {
@@ -1975,28 +2219,16 @@ exprt verilog_typecheck_exprt::convert_bit_select_expr(binary_exprt expr)
       << "bit-select of real is not allowed";
   }
 
-  if(op0.type().id()==ID_array)
+  if(op1.type().id() == ID_verilog_real)
   {
-    exprt &op1 = expr.op1();
-    convert_expr(op1);
-    if(op1.type().id() == ID_verilog_real)
-    {
-      throw errort().with_location(op1.source_location())
-        << "real number index is not allowed";
-    }
+    throw errort().with_location(op1.source_location())
+      << "real number index is not allowed";
+  }
 
+  if(op0.type().id() == ID_array)
+  {
     typet _index_type = index_type(to_array_type(op0.type()));
-
-    if(_index_type!=op1.type())
-    {
-      mp_integer i;
-      if(!to_integer_non_constant(op1, i))
-        op1=from_integer(i, _index_type);
-      else if(op1.is_true() || op1.is_false())
-        op1=from_integer(op1.is_true()?1:0, _index_type);
-      else
-        op1 = typecast_exprt{op1, _index_type};
-    }
+    op1 = typecast_exprt{op1, _index_type};
 
     expr.type() = to_array_type(op0.type()).element_type();
     expr.id(ID_index);
@@ -2004,27 +2236,38 @@ exprt verilog_typecheck_exprt::convert_bit_select_expr(binary_exprt expr)
   else
   {
     auto width = get_width(op0.type());
-    auto offset = atoi(op0.type().get(ID_C_offset).c_str());
+    auto offset = op0.type().get_int(ID_C_offset);
 
-    mp_integer op1;
+    auto op1_opt = is_constant_integer_post_convert(op1);
 
-    if(is_constant_expression(expr.op1(), op1))
+    if(op1_opt.has_value()) // constant index
     {
       // 1800-2017 sec 11.5.1: out-of-bounds bit-select is
       // x for 4-state and 0 for 2-state values.
-      if(op1 < offset || op1 >= width + offset)
+      auto op1_int = op1_opt.value();
+
+      if(op1_int < offset || op1_int >= width + offset)
         return false_exprt().with_source_location(expr);
 
-      op1 -= offset;
-      expr.op1() = from_integer(op1, natural_typet());
+      op1_int -= offset;
+
+      if(op0.type().get_bool(ID_C_big_endian))
+        op1_int = width - op1_int - 1;
+
+      expr.op1() = from_integer(op1_int, natural_typet());
     }
-    else
+    else // non-constant index
     {
-      convert_expr(expr.op1());
-      if(expr.op1().type().id() == ID_verilog_real)
+      if(offset != 0)
       {
-        throw errort().with_location(expr.op1().source_location())
-          << "real number index is not allowed";
+        expr.op1() =
+          minus_exprt{expr.op1(), from_integer(offset, expr.op1().type())};
+      }
+
+      if(op0.type().get_bool(ID_C_big_endian))
+      {
+        expr.op1() =
+          minus_exprt{from_integer(width - 1, expr.op1().type()), expr.op1()};
       }
     }
 
@@ -2213,7 +2456,7 @@ exprt verilog_typecheck_exprt::convert_binary_expr(binary_exprt expr)
   else if(expr.id()==ID_ashr)
   {
     // would only happen when re-typechecking, otherwise see above
-    assert(0);
+    DATA_INVARIANT(false, "no re-typechecking");
   }
   else if(expr.id()==ID_lshr)
   {
@@ -2502,7 +2745,6 @@ exprt verilog_typecheck_exprt::convert_trinary_expr(ternary_exprt expr)
   else if(expr.id()==ID_sva_cycle_delay) // #[1:2] something
   {
     expr.type()=bool_typet();
-    assert(expr.operands().size()==3);
     convert_expr(expr.op0());
     if(expr.op1().is_not_nil()) convert_expr(expr.op1());
     convert_expr(expr.op2());

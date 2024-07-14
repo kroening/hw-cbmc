@@ -59,6 +59,8 @@ protected:
   netlistt &dest;
   
   literalt new_input();
+  std::size_t input_counter = 0;
+  irep_idt mode;
 
   class rhs_entryt
   {
@@ -159,13 +161,11 @@ Function: convert_trans_to_netlistt::new_input
 
 literalt convert_trans_to_netlistt::new_input()
 {
-  irep_idt id="convert::input";
+  irep_idt id = "convert::input" + std::to_string(input_counter++);
 
   if(symbol_table.symbols.find(id)==symbol_table.symbols.end())
   {
-    symbolt symbol;
-    symbol.name=id;
-    symbol.type=bool_typet();
+    symbolt symbol{id, bool_typet(), mode};
     symbol.is_input=true;
     symbol.base_name="input";
     symbol_table.add(symbol);
@@ -286,6 +286,7 @@ void convert_trans_to_netlistt::operator()(
 
   const symbolt &module_symbol=ns.lookup(module);
   const transt &trans=to_trans_expr(module_symbol.value);
+  mode = module_symbol.mode;
 
   // build the net-list
   aig_prop_constraintt aig_prop(dest, get_message_handler());
@@ -532,7 +533,7 @@ void convert_trans_to_netlistt::convert_lhs_rec(
   std::size_t from, std::size_t to,
   propt &prop)
 {
-  assert(from<=to);
+  PRECONDITION(from <= to);
 
   if(expr.id()==ID_symbol)
   { 
@@ -629,11 +630,11 @@ literalt convert_trans_to_netlistt::convert_rhs(
     instantiate_convert(
       prop, dest.var_map, rhs_entry.expr, ns,
       get_message_handler(), rhs_entry.bv);
-      
-    assert(rhs_entry.bv.size()==rhs_entry.width);
+
+    DATA_INVARIANT(rhs_entry.bv.size() == rhs_entry.width, "bit-width match");
   }
 
-  assert(rhs.bit_number<rhs_entry.bv.size());
+  DATA_INVARIANT(rhs.bit_number < rhs_entry.bv.size(), "bit index in range");
   return rhs_entry.bv[rhs.bit_number];
 }
 
@@ -665,12 +666,12 @@ void convert_trans_to_netlistt::add_equality(const equal_exprt &src)
     constraint_list.push_back(src);
     return;
   }
-  
-  assert(rhs_entry.width!=0);
+
+  DATA_INVARIANT(rhs_entry.width != 0, "no empty entries");
 
   std::size_t lhs_width=boolbv_width(lhs.type());
 
-  assert(lhs_width==rhs_entry.width);
+  DATA_INVARIANT(lhs_width == rhs_entry.width, "bit-width match");
 
   add_equality_rec(src, lhs, 0, lhs_width-1, rhs_entry);
 }
@@ -693,8 +694,8 @@ void convert_trans_to_netlistt::add_equality_rec(
   std::size_t lhs_from, std::size_t lhs_to,
   rhs_entryt &rhs_entry)
 {
-  assert(lhs_from<=lhs_to);
-  
+  PRECONDITION(lhs_from <= lhs_to);
+
   if(lhs.id()==ID_next_symbol ||
      lhs.id()==ID_symbol)
   { 
@@ -730,11 +731,11 @@ void convert_trans_to_netlistt::add_equality_rec(
   }
   else if(lhs.id()==ID_extractbit)
   {
-    assert(lhs_to==lhs_from);
+    PRECONDITION(lhs_to == lhs_from);
 
     mp_integer i;
     if(to_integer_non_constant(to_extractbit_expr(lhs).index(), i))
-      assert(false);
+      PRECONDITION(false);
 
     lhs_from = lhs_from + i.to_ulong();
     add_equality_rec(

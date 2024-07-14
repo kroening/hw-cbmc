@@ -1023,21 +1023,29 @@ void verilog_typecheckt::convert_assert_assume_cover(
 
   irep_idt base_name;
 
+  // The label is optional.
   if(identifier == irep_idt())
   {
+    std::string kind = module_item.id() == ID_verilog_assert_property ? "assert"
+                       : module_item.id() == ID_verilog_assume_property
+                         ? "assume"
+                       : module_item.id() == ID_verilog_cover_property ? "cover"
+                                                                       : "";
+
     assertion_counter++;
-    base_name = std::to_string(assertion_counter);
+    base_name = kind + "." + std::to_string(assertion_counter);
   }
   else
     base_name = identifier;
 
+  // The assert/assume/cover module items use the module name space
   std::string full_identifier =
-    id2string(module_identifier) + ".property." + id2string(base_name);
+    id2string(module_identifier) + '.' + id2string(base_name);
 
   if(symbol_table.symbols.find(full_identifier) != symbol_table.symbols.end())
   {
     throw errort().with_location(module_item.source_location())
-      << "property identifier `" << base_name << "' already used";
+      << "identifier `" << base_name << "' already used";
   }
 
   module_item.identifier(full_identifier);
@@ -1082,14 +1090,30 @@ void verilog_typecheckt::convert_assert_assume_cover(
 
   if(identifier == irep_idt())
   {
+    std::string kind = statement.id() == ID_verilog_immediate_assert  ? "assert"
+                       : statement.id() == ID_verilog_assert_property ? "assert"
+                       : statement.id() == ID_verilog_smv_assert      ? "assert"
+                       : statement.id() == ID_verilog_cover_property  ? "cover"
+                       : statement.id() == ID_verilog_immediate_assume
+                         ? "assume"
+                       : statement.id() == ID_verilog_assume_property ? "assume"
+                       : statement.id() == ID_verilog_smv_assume      ? "assume"
+                                                                      : "";
+
     assertion_counter++;
-    base_name = std::to_string(assertion_counter);
+    base_name = kind + "." + std::to_string(assertion_counter);
   }
   else
     base_name = identifier;
 
-  std::string full_identifier =
-    id2string(module_identifier) + ".property." + id2string(base_name);
+  // We produce a full hierarchical identifier for the SystemVerilog immediate
+  // and concurrent assertion statements.
+  // We produce a separate name space for the SMV assertions/assumptions.
+  auto full_identifier =
+    statement.id() == ID_verilog_smv_assert ||
+        statement.id() == ID_verilog_smv_assume
+      ? id2string(module_identifier) + ".property." + id2string(base_name)
+      : hierarchical_identifier(base_name);
 
   if(symbol_table.symbols.find(full_identifier) != symbol_table.symbols.end())
   {
@@ -1439,6 +1463,9 @@ void verilog_typecheckt::convert_statement(
     convert_assert_assume_cover(
       to_verilog_assert_assume_cover_statement(statement));
   }
+  else if(statement.id() == ID_verilog_expect_property)
+  {
+  }
   else if(
     statement.id() == ID_verilog_immediate_assume ||
     statement.id() == ID_verilog_assume_property ||
@@ -1612,11 +1639,50 @@ void verilog_typecheckt::convert_module_item(
   else if(module_item.id() == ID_verilog_covergroup)
   {
   }
+  else if(module_item.id() == ID_verilog_property_declaration)
+  {
+    convert_property_declaration(to_verilog_property_declaration(module_item));
+  }
   else
   {
     throw errort().with_location(module_item.source_location())
       << "unexpected module item: " << module_item.id();
   }
+}
+
+/*******************************************************************\
+
+Function: verilog_typecheckt::convert_property_declaration
+
+  Inputs:
+
+ Outputs:
+
+ Purpose:
+
+\*******************************************************************/
+
+void verilog_typecheckt::convert_property_declaration(
+  verilog_property_declarationt &declaration)
+{
+  auto base_name = declaration.base_name();
+  auto full_identifier = hierarchical_identifier(base_name);
+
+  convert_expr(declaration.cond());
+  make_boolean(declaration.cond());
+
+  auto type = bool_typet{};
+  type.set(ID_C_verilog_type, ID_verilog_property_declaration);
+  symbolt symbol{full_identifier, type, mode};
+
+  symbol.module = module_identifier;
+  symbol.base_name = base_name;
+  symbol.pretty_name = strip_verilog_prefix(symbol.name);
+  symbol.is_macro = true;
+  symbol.value = declaration.cond();
+  symbol.location = declaration.source_location();
+
+  add_symbol(std::move(symbol));
 }
 
 /*******************************************************************\

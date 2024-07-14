@@ -591,6 +591,7 @@ description:
  	| program_declaration
  	| package_declaration
 	| attribute_instance_brace package_item
+		{ PARSER.parse_tree.create_package_item(stack_expr($2)); }
  	| attribute_instance_brace bind_directive
  	| config_declaration
         ;
@@ -2030,13 +2031,50 @@ cover_property_statement: TOK_COVER TOK_PROPERTY '(' property_spec ')' action_bl
 		{ init($$, ID_verilog_cover_property); mto($$, $4); mto($$, $6); }
 	;
 
+expect_property_statement: TOK_EXPECT '(' property_spec ')' action_block
+		{ init($$, ID_verilog_expect_property); mto($$, $3); mto($$, $5); }
+	;
+
 assertion_item_declaration:
 	  property_declaration
 	;
 
 property_declaration:
-          TOK_PROPERTY property_identifier TOK_ENDPROPERTY
+          TOK_PROPERTY property_identifier property_port_list_paren_opt ';'
+          property_spec
+          TOK_ENDPROPERTY property_identifier_opt
+		{ init($$, ID_verilog_property_declaration);
+		  stack_expr($$).set(ID_base_name, stack_expr($2).id());
+		  mto($$, $5); }
         ;
+
+property_identifier_opt:
+	  /* optional */
+	| TOK_COLON property_identifier
+	;
+
+property_port_list_paren_opt:
+	  /* optional */
+	| '(' property_port_list_opt ')'
+	;
+
+property_port_list_opt:
+	  /* optional */
+	| property_port_list
+	;
+
+property_port_list:
+	  property_port_item
+	| property_port_list_opt ',' property_port_item
+	;
+
+property_port_item:
+	  attribute_instance_brace property_formal_type formal_port_identifier variable_dimension_brace
+	;
+
+property_formal_type:
+	  TOK_PROPERTY
+	;
 
 property_spec:
 	  TOK_DISABLE TOK_IFF '(' expression ')' property_expr
@@ -2876,6 +2914,7 @@ statement_item:
 	| seq_block
 	| wait_statement
 	| procedural_assertion_statement
+	| expect_property_statement
 	;
 
 function_statement: statement
@@ -3002,6 +3041,18 @@ case_item:
                   stack_expr($$).operands().resize(1);
                   to_unary_expr(stack_expr($$)).op().id(ID_default);
                   mto($$, $2); }
+	;
+
+// System Verilog standard 1800-2017
+// A.6.7.1 Patterns
+
+assignment_pattern:
+	'\'' '{' expression_brace '}'
+		{ init($$, ID_verilog_assignment_pattern); swapop($$, $3); }
+	;
+
+assignment_pattern_expression:
+	  assignment_pattern
 	;
 
 // System Verilog standard 1800-2017
@@ -3326,6 +3377,7 @@ primary:  primary_literal
 	| '(' mintypmax_expression ')'
 		{ $$ = $2; }
 	| cast
+	| assignment_pattern_expression
         | TOK_NULL { init($$, ID_NULL); }
 	;
 

@@ -18,6 +18,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/simplify_expr.h>
 #include <util/std_expr.h>
 
+#include "aval_bval_encoding.h"
 #include "expr2verilog.h"
 #include "sva_expr.h"
 #include "verilog_expr.h"
@@ -26,6 +27,136 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <cassert>
 #include <map>
 #include <set>
+
+/*******************************************************************\
+
+Function: verilog_synthesist::extract
+
+  Inputs:
+
+ Outputs:
+
+ Purpose:
+
+\*******************************************************************/
+
+exprt verilog_synthesist::extract(
+  const exprt &src,
+  const mp_integer &offset,
+  const typet &dest_type)
+{
+  auto src_width = to_bitvector_type(src.type()).get_width();
+  auto dest_width = get_width(dest_type);
+
+  // first add padding, if src is too small
+  exprt padded_src;
+  auto padding_width = dest_width + offset - src_width;
+
+  if(padding_width > 0)
+  {
+    auto padded_width_int =
+      numeric_cast_v<std::size_t>(src_width + padding_width);
+    padded_src = concatenation_exprt{
+      {unsignedbv_typet{numeric_cast_v<std::size_t>(padding_width)}.zero_expr(),
+       src},
+      bv_typet{padded_width_int}};
+  }
+  else // large enough
+    padded_src = src;
+
+  // now extract
+  if(dest_type.id() == ID_bool)
+  {
+    return extractbit_exprt{padded_src, from_integer(offset, integer_typet{})};
+  }
+  else
+  {
+    return extractbits_exprt{
+      padded_src, from_integer(offset, integer_typet{}), dest_type};
+  }
+}
+
+/*******************************************************************\
+
+Function: verilog_synthesist::from_bitvector
+
+  Inputs:
+
+ Outputs:
+
+ Purpose:
+
+\*******************************************************************/
+
+exprt verilog_synthesist::from_bitvector(
+  const exprt &src,
+  const mp_integer &offset,
+  const typet &dest)
+{
+  if(dest.id() == ID_struct)
+  {
+    const auto &struct_type = to_struct_type(dest);
+    exprt::operandst field_values;
+    field_values.reserve(struct_type.components().size());
+
+    // start from the top; the first field is the most significant
+    mp_integer component_offset = get_width(dest);
+
+    for(auto &component : struct_type.components())
+    {
+      auto width = get_width(component.type());
+      component_offset -= width;
+      // rec. call
+      field_values.push_back(
+        from_bitvector(src, offset + component_offset, component.type()));
+    }
+
+    return struct_exprt{std::move(field_values), struct_type};
+  }
+  else
+  {
+    return extract(src, offset, dest);
+  }
+}
+
+/*******************************************************************\
+
+Function: verilog_synthesist::to_bitvector
+
+  Inputs:
+
+ Outputs:
+
+ Purpose:
+
+\*******************************************************************/
+
+exprt verilog_synthesist::to_bitvector(const exprt &src)
+{
+  const auto &src_type = src.type();
+
+  if(src_type.id() == ID_struct)
+  {
+    const auto &struct_type = to_struct_type(src_type);
+    exprt::operandst field_values;
+    field_values.reserve(struct_type.components().size());
+
+    // the first struct member is the most significant
+    for(auto &component : struct_type.components())
+    {
+      auto member = member_exprt{src, component};
+      auto field_value = to_bitvector(member); // rec. call
+      field_values.push_back(std::move(field_value));
+    }
+
+    auto width_int = numeric_cast_v<std::size_t>(get_width(src));
+    return concatenation_exprt{std::move(field_values), bv_typet{width_int}};
+  }
+  else
+  {
+    return src;
+  }
+}
 
 /*******************************************************************\
 
@@ -74,6 +205,18 @@ exprt verilog_synthesist::synth_expr(exprt expr, symbol_statet symbol_state)
       UNREACHABLE;
     }
   }
+  else if(expr.id() == ID_constant)
+  {
+    // encode into aval/bval
+    if(
+      expr.type().id() == ID_verilog_unsignedbv ||
+      expr.type().id() == ID_verilog_signedbv)
+    {
+      return lower_to_aval_bval(to_constant_expr(expr));
+    }
+
+    return expr;
+  }
   else if(expr.id()==ID_function_call)
   {
     return expand_function_call(to_function_call_expr(expr));
@@ -87,12 +230,47 @@ exprt verilog_synthesist::synth_expr(exprt expr, symbol_statet symbol_state)
   }
   else if(expr.id()==ID_typecast)
   {
-    auto &typecast_expr = to_typecast_expr(expr);
-    typecast_expr.op() = synth_expr(typecast_expr.op(), symbol_state);
+    {
+      auto &op = to_typecast_expr(expr).op();
+      op = synth_expr(op, symbol_state);
 
-    // we perform some form of simplification for these
-    if(typecast_expr.op().is_constant())
-      simplify(expr, ns);
+      // we perform some form of simplification for these
+      if(op.is_constant())
+        simplify(expr, ns);
+    }
+
+    if(expr.id() == ID_typecast)
+    {
+      auto &typecast_expr = to_typecast_expr(expr);
+      typecast_expr.op() = synth_expr(typecast_expr.op(), symbol_state);
+
+      const auto &src_type = typecast_expr.op().type();
+      const auto &dest_type = typecast_expr.type();
+
+      if(
+        dest_type.id() == ID_verilog_unsignedbv ||
+        dest_type.id() == ID_verilog_signedbv)
+      {
+        auto aval_bval_type = lower_to_aval_bval(dest_type);
+
+        if(is_aval_bval(src_type))
+        {
+          // separately convert aval and bval
+          return aval_bval_conversion(typecast_expr.op(), aval_bval_type);
+        }
+      }
+      else if(dest_type.id() == ID_struct)
+      {
+        return from_bitvector(typecast_expr.op(), 0, dest_type);
+      }
+      else
+      {
+        if(src_type.id() == ID_struct)
+        {
+          return extract(to_bitvector(typecast_expr.op()), 0, dest_type);
+        }
+      }
+    }
 
     return expr;
   }
@@ -831,7 +1009,9 @@ void verilog_synthesist::assignment_rec(
     const exprt &lhs_compound = member_expr.struct_op();
     auto component_name = member_expr.get_component_name();
 
-    if(lhs_compound.type().id() == ID_struct)
+    if(
+      lhs_compound.type().id() == ID_struct ||
+      lhs_compound.type().id() == ID_union)
     {
       // turn
       //   s.m=e
@@ -2091,6 +2271,39 @@ void verilog_synthesist::synth_assert_assume_cover(
   // but this is to be checked.
   // Arguments to procedural concurrent assertions are complex
   // (1800-2017 16.14.6.1)
+  {
+    exprt cond_for_comment = statement.condition();
+
+    // Are we in an initial or always block?
+    if(construct != constructt::INITIAL)
+    {
+      // one of the 'always' variants -- assertions and assumptions have an implicit 'always'
+      if(
+        statement.id() != ID_verilog_cover_property &&
+        statement.id() != ID_verilog_immediate_cover)
+      {
+        if(cond_for_comment.id() != ID_sva_always)
+          cond_for_comment = sva_always_exprt(cond_for_comment);
+      }
+    }
+
+    // mark 'assume' and 'cover' properties as such
+    if(
+      statement.id() == ID_verilog_assume_property ||
+      statement.id() == ID_verilog_immediate_assume ||
+      statement.id() == ID_verilog_smv_assume)
+    {
+      cond_for_comment = sva_assume_exprt(cond_for_comment);
+    }
+    else if(statement.id() == ID_verilog_cover_property)
+    {
+      // 'cover' properties are existential
+      cond_for_comment = sva_cover_exprt(cond_for_comment);
+    }
+
+    symbol.location.set_comment(to_string(cond_for_comment));
+  }
+
   exprt cond;
 
   // Are we in an initial or always block?
@@ -2164,6 +2377,27 @@ void verilog_synthesist::synth_assert_assume_cover(
   // These are static concurrent assert/cover module items.
   const irep_idt &identifier = module_item.identifier();
   symbolt &symbol=symbol_table_lookup(identifier);
+
+  {
+    exprt cond_for_comment = module_item.condition();
+
+    if(
+      module_item.id() == ID_verilog_assert_property ||
+      module_item.id() == ID_verilog_assume_property)
+    {
+      // Concurrent assertions and assumptions come with an implicit 'always'
+      // (1800-2017 Sec 16.12.11).
+      if(cond_for_comment.id() != ID_sva_always)
+        cond_for_comment = sva_always_exprt{cond_for_comment};
+    }
+    else if(module_item.id() == ID_verilog_cover_property)
+    {
+      // 'cover' requirements are existential.
+      cond_for_comment = sva_cover_exprt{cond_for_comment};
+    }
+
+    symbol.location.set_comment(to_string(cond_for_comment));
+  }
 
   construct=constructt::OTHER;
 
@@ -2260,71 +2494,34 @@ exprt verilog_synthesist::case_comparison(
   const exprt &case_operand,
   const exprt &pattern)
 {
-  // we need to take case of ?, x, z in the pattern
+  // the pattern has the max type, not the case operand
   const typet &pattern_type=pattern.type();
-  
-  if(pattern_type.id()==ID_verilog_signedbv ||
-     pattern_type.id()==ID_verilog_unsignedbv)
+
+  // we need to take case of ?, x, z in the pattern
+  if(is_aval_bval(pattern_type))
   {
-    // try to simplify the pattern
-    exprt tmp=pattern;
-    
-    simplify(tmp, ns);
-    
-    if(tmp.id()!=ID_constant)
-    {
-      warning().source_location=pattern.source_location();
-      warning() << "unexpected case pattern: " << to_string(tmp) << eom;
-    }
-    else
-    {
-      exprt new_case_operand=case_operand;
+    // We are using masking based on the pattern.
+    // The aval is the comparison value, and the
+    // negation of bval is the mask.
+    auto pattern_aval = ::aval(pattern);
+    auto pattern_bval = ::bval(pattern);
+    auto mask_expr = bitnot_exprt{pattern_bval};
 
-      // the pattern has the max type
-      unsignedbv_typet new_type(pattern.type().get_int(ID_width));
-      new_case_operand = typecast_exprt{new_case_operand, new_type};
+    auto case_operand_casted = typecast_exprt{
+      typecast_exprt::conditional_cast(
+        case_operand, aval_bval_underlying(pattern_type)),
+      mask_expr.type()};
 
-      // we are using masking!
-    
-      std::string new_pattern_value=
-        id2string(to_constant_expr(tmp).get_value());
-
-      // ?zx -> 0
-      for(unsigned i=0; i<new_pattern_value.size(); i++)
-        if(new_pattern_value[i]=='?' ||
-           new_pattern_value[i]=='z' ||
-           new_pattern_value[i]=='x')
-          new_pattern_value[i]='0';
-
-      auto new_pattern =
-        from_integer(string2integer(new_pattern_value, 2), new_type);
-
-      std::string new_mask_value=
-        id2string(to_constant_expr(tmp).get_value());
-
-      // ?zx -> 0, 0 -> 1
-      for(unsigned i=0; i<new_mask_value.size(); i++)
-        if(new_mask_value[i]=='?' ||
-           new_mask_value[i]=='z' ||
-           new_mask_value[i]=='x')
-          new_mask_value[i]='0';
-        else
-          new_mask_value[i]='1';
-
-      auto new_mask = from_integer(string2integer(new_mask_value, 2), new_type);
-
-      exprt bitand_expr = bitand_exprt{new_case_operand, new_mask};
-
-      return equal_exprt{bitand_expr, new_pattern};
-    }
+    return equal_exprt{
+      bitand_exprt{case_operand_casted, mask_expr},
+      bitand_exprt{pattern_aval, mask_expr}};
   }
 
-  if(pattern.type()==case_operand.type())
-    return equal_exprt(case_operand, pattern);
+  // 2-valued comparison
+  exprt case_operand_casted =
+    typecast_exprt::conditional_cast(case_operand, pattern_type);
 
-  // the pattern has the max type
-  exprt tmp_case_operand=typecast_exprt(case_operand, pattern.type());
-  return equal_exprt(tmp_case_operand, pattern);
+  return equal_exprt(case_operand_casted, pattern);
 }
 
 /*******************************************************************\
@@ -2952,6 +3149,11 @@ void verilog_synthesist::synth_statement(
     synth_assert_assume_cover(
       to_verilog_assert_assume_cover_statement(statement));
   }
+  else if(statement.id() == ID_verilog_expect_property)
+  {
+    throw errort().with_location(statement.source_location())
+      << "synthesis of expect property not supported";
+  }
   else if(statement.id()==ID_non_blocking_assign)
     synth_assign(statement, false);
   else if(statement.id()==ID_force)
@@ -3077,6 +3279,9 @@ void verilog_synthesist::synth_module_item(
     // done already
   }
   else if(module_item.id() == ID_verilog_covergroup)
+  {
+  }
+  else if(module_item.id() == ID_verilog_property_declaration)
   {
   }
   else

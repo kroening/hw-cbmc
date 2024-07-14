@@ -9,6 +9,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #ifndef CPROVER_VERILOG_TYPECHEK_BASE_H
 #define CPROVER_VERILOG_TYPECHEK_BASE_H
 
+#include <util/expr.h>
 #include <util/mp_arith.h>
 #include <util/namespace.h>
 #include <util/typecheck.h>
@@ -44,14 +45,16 @@ protected:
   const namespacet &ns;
   const irep_idt mode;
 
-  mp_integer get_width(const exprt &expr)
+  static mp_integer get_width(const exprt &expr)
   {
     return get_width(expr.type());
   }
-  mp_integer get_width(const typet &type);
-  mp_integer array_size(const array_typet &);
-  mp_integer array_offset(const array_typet &);
-  typet index_type(const array_typet &);
+
+  static mp_integer get_width(const typet &);
+  static std::optional<mp_integer> get_width_opt(const typet &);
+  static mp_integer array_size(const array_typet &);
+  static mp_integer array_offset(const array_typet &);
+  static typet index_type(const array_typet &);
 };
 
 #endif

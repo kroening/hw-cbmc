@@ -16,7 +16,6 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include "verilog_typecheck_base.h"
 
-#include <cassert>
 #include <stack>
 
 class function_call_exprt;
@@ -105,12 +104,13 @@ protected:
 
   // elaboration (expansion and folding) of constant expressions and functions
   bool is_constant_expression(const exprt &, mp_integer &value);
+  std::optional<mp_integer> is_constant_integer_post_convert(const exprt &);
   exprt elaborate_constant_expression(exprt);
 
   // To be overridden, requires a Verilog interpreter.
   virtual exprt elaborate_constant_function_call(const function_call_exprt &)
   {
-    assert(false);
+    UNREACHABLE;
   }
 
 private:
@@ -134,8 +134,14 @@ private:
   void tc_binary_expr(const exprt &expr, exprt &op0, exprt &op1);
   void no_bool_ops(exprt &);
 
+  // system functions
   exprt bits(const exprt &);
   std::optional<mp_integer> bits_rec(const typet &) const;
+  constant_exprt left(const exprt &);
+  constant_exprt right(const exprt &);
+  constant_exprt low(const exprt &);
+  constant_exprt high(const exprt &);
+  constant_exprt increment(const exprt &);
 };
 
 bool verilog_typecheck(
