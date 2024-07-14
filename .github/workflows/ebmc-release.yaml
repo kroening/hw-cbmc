@@ -62,7 +62,7 @@ jobs:
         uses: actions/cache@v4
         with:
           save-always: true
-          path: .ccache
+          path: /github/home/.cache/ccache
           key: ${{ runner.os }}-22.04-make-gcc-${{ github.ref }}-${{ github.sha }}-PR
           restore-keys: ${{ runner.os }}-22.04-make-gcc
       - name: ccache environment
@@ -244,7 +244,7 @@ jobs:
       - name: Prepare ccache
         uses: actions/cache@v4
         with:
-          path: .ccache
+          path: /github/home/.cache/ccache
           save-always: true
           key: ${{ runner.os }}-24.04-make-emcc-${{ github.ref }}-${{ github.sha }}-PR
           restore-keys: |
@@ -272,9 +272,10 @@ jobs:
                HOSTLINKFLAGS=""
       - name: print version number via node.js
         run: node --no-experimental-fetch src/ebmc/ebmc.js --version
-      - name: Setup package
+      - name: Create WASM package
+        id: create_packages
         run: |
-          (cd src/ebmc; tar cfz ~/ebmc.tgz ebmc.js ebmc.wasm ebmc.html)
+          (cd src/ebmc; tar cvfz ~/ebmc.tgz ebmc.js ebmc.wasm ebmc.html)
           echo "wasm_package_path=~/ebmc.tgz" >> $GITHUB_OUTPUT
           echo "wasm_package_name=ebmc-${VERSION}.tgz" >> $GITHUB_OUTPUT
       - name: Print ccache stats
