@@ -251,13 +251,14 @@ jobs:
       - name: Build with make
         run: |
           make -C src -j4 \
+               BUILD_ENV=Unix \
                CXX="ccache emcc -fwasm-exceptions" \
                LINKFLAGS="-sEXPORTED_RUNTIME_METHODS=callMain" \
-               HOSTCXX="ccache g++" \
-               BUILD_ENV=Unix \
                LINKLIB="emar rc \$@ \$^" \
                AR="emar" \
-               EXEEXT=".html"
+               EXEEXT=".html" \
+               HOSTCXX="ccache g++" \
+               HOSTLINKFLAGS=""
       - name: print version number via node.js
         run: node --no-experimental-fetch src/ebmc/ebmc.js --version
       - name: Setup package
