@@ -272,8 +272,9 @@ jobs:
         id: create_packages
         run: |
           (cd src/ebmc; tar cvfz ~/ebmc.tgz ebmc.js ebmc.wasm ebmc.html)
+          VERSION=$(echo ${{ github.ref }} | cut -d "/" -f 3 | cut -d "-" -f 2)
           echo "wasm_package_path=${HOME}/ebmc.tgz" >> $GITHUB_OUTPUT
-          echo "wasm_package_name=ebmc-${VERSION}.tgz" >> $GITHUB_OUTPUT
+          echo "wasm_package_name=ebmc-${VERSION}-wasm.tgz" >> $GITHUB_OUTPUT
       - name: Print ccache stats
         run: ccache -s
       - name: Upload WASM
@@ -309,8 +310,7 @@ jobs:
 
           ## Red Hat Linux and derivates
 
-          For Red Hat, CentOS, Fedora, Amazon Linux,
-          install EBMC by downloading the *.rpm package below and then run
+          For Red Hat, CentOS, Fedora, Amazon Linux, install EBMC by downloading the *.rpm package below and then run
 
           \`\`\`sh
           rpm -i ${{ needs.centos8-package.outputs.rpm_package_name }}
