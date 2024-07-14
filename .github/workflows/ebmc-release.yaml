@@ -259,8 +259,9 @@ jobs:
         run: node --no-experimental-fetch src/ebmc/ebmc.js --version
       - name: Setup package
         run: |
-          echo "wasm_package_path=src/ebmc/ebmc.js" >> $GITHUB_OUTPUT
-          echo "wasm_package_name=ebmc-${VERSION}.js" >> $GITHUB_OUTPUT
+          (cd src/ebmc; tar cfz ~/ebmc.tgz ebmc.js ebmc.wasm ebmc.html)
+          echo "wasm_package_path=$(PWD)/ebmc.tgz" >> $GITHUB_OUTPUT
+          echo "wasm_package_name=ebmc-${VERSION}.tgz" >> $GITHUB_OUTPUT
       - name: Print ccache stats
         run: ccache -s
       - name: Upload WASM
