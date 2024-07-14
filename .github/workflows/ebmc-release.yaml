@@ -62,13 +62,11 @@ jobs:
         uses: actions/cache@v4
         with:
           save-always: true
-          path: /github/home/.cache/ccache
+          path: /github/home/.cache
           key: ${{ runner.os }}-22.04-make-gcc-${{ github.ref }}-${{ github.sha }}-PR
           restore-keys: ${{ runner.os }}-22.04-make-gcc
-      - name: ccache environment
-        run: |
-          echo "CCACHE_BASEDIR=$PWD" >> $GITHUB_ENV
-          echo "CCACHE_DIR=$PWD/.ccache" >> $GITHUB_ENV
+      - name: ccache path
+        run: ccache -p | grep cache_dir
       - name: Get minisat
         run: make -C lib/cbmc/src minisat2-download
       - name: Build with make
@@ -244,18 +242,16 @@ jobs:
       - name: Prepare ccache
         uses: actions/cache@v4
         with:
-          path: /github/home/.cache/ccache
+          path: /github/home/.cache
           save-always: true
           key: ${{ runner.os }}-24.04-make-emcc-${{ github.ref }}-${{ github.sha }}-PR
           restore-keys: |
             ${{ runner.os }}-24.04-make-emcc-${{ github.ref }}
             ${{ runner.os }}-24.04-make-emcc
-      - name: ccache environment
-        run: |
-          echo "CCACHE_BASEDIR=$PWD" >> $GITHUB_ENV
-          echo "CCACHE_DIR=$PWD/.ccache" >> $GITHUB_ENV
       - name: Zero ccache stats and limit in size
         run: ccache -z --max-size=500M
+      - name: ccache path
+        run: ccache -p | grep cache_dir
       - name: Get minisat
         run: make -C lib/cbmc/src minisat2-download
       - name: Build with make
@@ -276,7 +272,7 @@ jobs:
         id: create_packages
         run: |
           (cd src/ebmc; tar cvfz ~/ebmc.tgz ebmc.js ebmc.wasm ebmc.html)
-          echo "wasm_package_path=~/ebmc.tgz" >> $GITHUB_OUTPUT
+          echo "wasm_package_path=${HOME}/ebmc.tgz" >> $GITHUB_OUTPUT
           echo "wasm_package_name=ebmc-${VERSION}.tgz" >> $GITHUB_OUTPUT
       - name: Print ccache stats
         run: ccache -s
