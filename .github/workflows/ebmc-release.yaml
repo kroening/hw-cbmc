@@ -252,8 +252,8 @@ jobs:
         run: |
           make -C src -j4 \
                BUILD_ENV=Unix \
-               CXX="ccache emcc -fwasm-exceptions" \
-               LINKFLAGS="-sEXPORTED_RUNTIME_METHODS=callMain" \
+               CXX="ccache emcc -fwasm-exceptions -sEXPORTED_RUNTIME_METHODS=callMain" \
+               LINKFLAGS="" \
                LINKLIB="emar rc \$@ \$^" \
                AR="emar" \
                EXEEXT=".html" \
