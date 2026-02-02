@@ -327,10 +327,10 @@ jobs:
     runs-on: ubuntu-24.04
     needs: [get-version-information]
     steps:
+      - uses: actions/checkout@v6
       - name: create Homebrew formula
         env:
           EBMC_VERSION: ${{ needs.get-version-information.outputs.version }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cat << EOM > Formula/ebmc@${{ env.EBMC_VERSION }}.rb
           class Ebmc < Formula
