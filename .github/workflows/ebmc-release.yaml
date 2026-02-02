@@ -376,11 +376,11 @@ jobs:
         env:
           EBMC_VERSION: ${{ needs.get-version-information.outputs.version }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v8
         with:
-          head: ebmc-formula-${{ env.EBMC_VERSION }}
-          repository: diffblue/hw-cbmc
+          branch: ebmc-formula-${{ env.EBMC_VERSION }}
           base: main
           title: "Homebrew formula for ebmc ${{ env.EBMC_VERSION }}"
           body: |
-            Automated update for ebmc Homebrew formula
+            Automated update for ebmc Homebrew formula.
+            Created by .github/workflows/ebmc-release.yaml
