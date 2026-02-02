@@ -369,6 +369,7 @@ jobs:
         run: |
           FILE=Formula/ebmc@${{ env.EBMC_VERSION }}.rb
           # git checkout -b ebmc-formula-${{ env.EBMC_VERSION }}
+          git fetch origin main
           git checkout main
           git add $FILE
           git config user.name "github-actions[bot]"
