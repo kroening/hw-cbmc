@@ -331,6 +331,14 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v6
+
+      - name: get on the main branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git fetch origin main
+          git checkout main
+
       - name: create Homebrew formula
         env:
           EBMC_VERSION: ${{ needs.get-version-information.outputs.version }}
@@ -361,21 +369,17 @@ jobs:
             end
           end
           EOM
-          
+
       - name: create and push branch
         env:
           EBMC_VERSION: ${{ needs.get-version-information.outputs.version }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           FILE=Formula/ebmc@${{ env.EBMC_VERSION }}.rb
-          # git checkout -b ebmc-formula-${{ env.EBMC_VERSION }}
-          git fetch origin main
-          git checkout main
           git add $FILE
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "Homebrew formula for ebmc ${{ env.EBMC_VERSION }}" $FILE
-          # git push origin HEAD
 
       - name: create PR
         env:
