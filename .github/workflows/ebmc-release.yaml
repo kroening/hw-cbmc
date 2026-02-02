@@ -348,8 +348,8 @@ jobs:
             desc "Model Checker for SystemVerilog"
             homepage "https://www.cprover.org/ebmc/"
             url "https://github.com/diffblue/hw-cbmc.git",
-              tag: "ebmc-5.8",
-              revision: "${REVISION}"
+              tag: "${{ github.ref }}",
+              revision: "${{ github.sha }}"
             version "5.8"
             license "BSD-3-Clause"
 
