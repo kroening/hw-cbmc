@@ -367,6 +367,8 @@ jobs:
           FILE=Formula/ebmc@${{ env.EBMC_VERSION }}.rb
           git checkout -b ebmc-formula-${{ env.EBMC_VERSION }}
           git add $FILE
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "Homebrew formula for ebmc ${{ env.EBMC_VERSION }}" $FILE
           git push origin HEAD
 
