@@ -333,8 +333,6 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: get on the main branch
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git fetch origin main
           git checkout main
@@ -348,9 +346,9 @@ jobs:
             desc "Model Checker for SystemVerilog"
             homepage "https://www.cprover.org/ebmc/"
             url "https://github.com/diffblue/hw-cbmc.git",
-              tag: "${{ github.ref }}",
+              tag: "ebmc-${{ env.EBMC_VERSION }}",
               revision: "${{ github.sha }}"
-            version "5.8"
+            version "ebmc-${{ env.EBMC_VERSION }}"
             license "BSD-3-Clause"
 
             uses_from_macos "flex" => :build
@@ -370,10 +368,9 @@ jobs:
           end
           EOM
 
-      - name: create and push branch
+      - name: create the commit
         env:
           EBMC_VERSION: ${{ needs.get-version-information.outputs.version }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           FILE=Formula/ebmc@${{ env.EBMC_VERSION }}.rb
           git add $FILE
@@ -384,7 +381,6 @@ jobs:
       - name: create PR
         env:
           EBMC_VERSION: ${{ needs.get-version-information.outputs.version }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         uses: peter-evans/create-pull-request@v8
         with:
           branch: ebmc-formula-${{ env.EBMC_VERSION }}
