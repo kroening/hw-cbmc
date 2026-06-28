@@ -1,0 +1,17 @@
+CORE
+streaming_concatenation3.sv
+
+^\[main\.p1\] main\.s1 == 171: PROVED .*$
+^\[main\.p2\] main\.s2 == 186: PROVED .*$
+^\[main\.p3\] main\.s3 == 213: PROVED .*$
+^EXIT=0$
+^SIGNAL=0$
+--
+^warning: ignoring
+^Invariant check failed$
+--
+Per 1800-2017 11.4.14, the stream_concatenation of a streaming
+concatenation may contain more than one stream_expression, e.g.
+{>>{a, b}} or {<<4{a, b}}. Such streaming concatenations are packed into a
+single bit vector (preserving written order) and, for the left-shift form,
+reversed in blocks of the slice size.
