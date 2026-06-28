@@ -80,6 +80,30 @@ jobs:
         run: make -C regression/vlindex test
       - name: Print ccache stats
         run: ccache -s
+      - name: Upload the vlsim binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: vlsim-binary
+          retention-days: 5
+          path: src/vlsim/vlsim
+
+  # This job takes approximately 1 minute
+  sv-tests-vlsim:
+    runs-on: ubuntu-20.04
+    needs: check-ubuntu-20_04-make-gcc
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: Get the vlsim binary
+        uses: actions/download-artifact@v4
+        with:
+          name: vlsim-binary
+          path: vlsim
+      - name: Try the vlsim binary
+        run: chmod a+x ./vlsim/vlsim ; ./vlsim/vlsim --version
+      - name: Run sv-tests with vlsim
+        run: PATH=$PATH:$PWD/vlsim examples/chipsalliance-sv-tests/vlsim-sv-tests.sh
 
   # This job takes approximately 15 minutes
   check-ubuntu-24_04-make-clang:
