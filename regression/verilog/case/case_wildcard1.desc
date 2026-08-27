@@ -1,0 +1,16 @@
+KNOWNBUG
+case_wildcard1.sv
+--bound 1
+^\[main\.p0\] always main\.r1 == 0: PROVED .*$
+^\[main\.p1\] always \(main\.sel\[1\] == 0 \|-> main\.r2 == 1\): PROVED up to bound 1$
+^\[main\.p2\] always \(main\.sel\[1\] == 1 \|-> main\.r2 == 0\): PROVED up to bound 1$
+^EXIT=0$
+^SIGNAL=0$
+--
+^warning: ignoring
+--
+The case items of a case statement are compared using 4-state
+equality, per 1800-2017 12.5.1, i.e., x and z in a case item are
+not wildcards. Only casex and casez have wildcards. The case items
+are currently masked irrespective of the kind of case statement,
+and hence p0 is refuted.
