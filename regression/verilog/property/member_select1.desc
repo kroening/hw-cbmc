@@ -1,4 +1,4 @@
-KNOWNBUG
+CORE
 member_select1.sv
 --bound 3
 ^\[main\.assert\.1\] .*: PROVED up to bound 3$
@@ -7,6 +7,5 @@ member_select1.sv
 --
 ^warning: ignoring
 --
-Member selects on struct variables inside a named property yield
-"unknown identifier field2" during type checking. This is the
-second example in https://github.com/diffblue/hw-cbmc/issues/2103.
+This is the second example in
+https://github.com/diffblue/hw-cbmc/issues/2103.
