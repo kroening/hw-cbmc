@@ -1810,25 +1810,33 @@ Function: verilog_typecheckt::preresolve_identifiers
 
 void verilog_typecheckt::preresolve_identifiers(exprt &expr)
 {
-  expr.visit_pre(
-    [this](exprt &node)
+  if(expr.id() == ID_verilog_identifier)
+  {
+    auto &identifier_expr = to_verilog_identifier_expr(expr);
+    auto base_name = identifier_expr.base_name();
+    auto symbol_ptr = resolve(base_name);
+    if(symbol_ptr != nullptr)
     {
-      if(node.id() == ID_verilog_identifier)
-      {
-        auto &identifier_expr = to_verilog_identifier_expr(node);
-        auto base_name = identifier_expr.base_name();
-        auto symbol_ptr = resolve(base_name);
-        if(symbol_ptr != nullptr)
-        {
-          identifier_expr.preresolved(symbol_ptr->name);
-        }
-        else
-        {
-          throw errort().with_location(node.source_location())
-            << "unknown identifier " << base_name;
-        }
-      }
-    });
+      identifier_expr.preresolved(symbol_ptr->name);
+    }
+    else
+    {
+      throw errort().with_location(expr.source_location())
+        << "unknown identifier " << base_name;
+    }
+  }
+  else if(expr.id() == ID_hierarchical_identifier)
+  {
+    // The identifier on the rhs of the '.' is a member or an
+    // identifier in the scope given by the lhs; it is resolved
+    // once the type of the lhs is known.
+    preresolve_identifiers(to_hierarchical_identifier_expr(expr).lhs());
+  }
+  else
+  {
+    for(auto &op : expr.operands())
+      preresolve_identifiers(op);
+  }
 }
 
 /*******************************************************************\

@@ -11,8 +11,8 @@ module main(input wire clk, input wire rst);
     s.field2 <= 0;
   end
 
-  // The member select in the named property yields
-  // "unknown identifier field2".
+  // The member select is resolved when the named property
+  // is instantiated.
   property p;
     @(posedge clk) rst |=> ##1 s.field2 == 0;
   endproperty
