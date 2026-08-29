@@ -1,0 +1,14 @@
+CORE
+case_wildcard2.sv
+--bound 1
+^\[main\.p0\] always \(main\.sel\[1\] == 0 \|-> main\.rx == 1\): PROVED up to bound 1$
+^\[main\.p1\] always \(main\.sel\[1\] == 1 \|-> main\.rx == 0\): PROVED up to bound 1$
+^\[main\.p2\] always main\.rz == 0: PROVED up to bound 1$
+^EXIT=0$
+^SIGNAL=0$
+--
+^warning: ignoring
+--
+1800-2017 12.5.1: casex treats both x and z bits in a case item as
+wildcards, whereas casez treats only z (and ?) bits as wildcards.
+An x bit in a casez case item is not a wildcard.
