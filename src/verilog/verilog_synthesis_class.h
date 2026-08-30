@@ -315,9 +315,12 @@ protected:
 
   void post_process_initial(exprt &constraints);
   void post_process_wire(const irep_idt &identifier, exprt &expr);
-  
-  exprt case_comparison(const exprt &case_operand, const exprt &pattern);
-  
+
+  exprt case_comparison(
+    irep_idt case_type,
+    const exprt &case_operand,
+    const exprt &pattern);
+
   typedef enum { CURRENT, NEXT } curr_or_nextt;
 
   exprt symbol_expr(const symbolt &, curr_or_nextt curr_or_next) const;
@@ -331,6 +334,7 @@ protected:
     exprt &constraints);
 
   exprt synth_case_values(
+    irep_idt case_type,
     const exprt &values,
     const exprt &case_operand);
 

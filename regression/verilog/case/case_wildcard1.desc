@@ -1,4 +1,4 @@
-KNOWNBUG
+CORE
 case_wildcard1.sv
 --bound 1
 ^\[main\.p0\] always main\.r1 == 0: PROVED .*$
@@ -9,8 +9,6 @@ case_wildcard1.sv
 --
 ^warning: ignoring
 --
-The case items of a case statement are compared using 4-state
+The case items of a plain case statement are compared using 4-state
 equality, per 1800-2017 12.5.1, i.e., x and z in a case item are
-not wildcards. Only casex and casez have wildcards. The case items
-are currently masked irrespective of the kind of case statement,
-and hence p0 is refuted.
+not wildcards. Only casex and casez have wildcards. Hence p0 holds.

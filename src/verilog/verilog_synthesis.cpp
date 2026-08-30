@@ -2630,30 +2630,69 @@ Function: verilog_synthesist::case_comparison
 \*******************************************************************/
 
 exprt verilog_synthesist::case_comparison(
+  irep_idt case_type,
   const exprt &case_operand,
   const exprt &pattern)
 {
+  PRECONDITION(
+    case_type == ID_verilog_case || case_type == ID_verilog_casex ||
+    case_type == ID_verilog_casez);
+
   // the pattern has the max type, not the case operand
   const typet &pattern_type=pattern.type();
 
-  // we need to take case of ?, x, z in the pattern
+  // 1800-2017 12.5.1: a plain 'case' statement compares the case
+  // operand and the case items using 4-state equality (i.e., ===).
+  // The x and z bits in a case item are not wildcards. Only casex and
+  // casez have wildcards:
+  // * casez treats z (and ?) bits in a case item as wildcards, and
+  // * casex treats x, z (and ?) bits in a case item as wildcards.
+  // In the aval/bval encoding, a case-item bit is
+  //   x when bval=1 and aval=0, and
+  //   z when bval=1 and aval=1.
+  // The non-wildcard bit positions are compared using 4-state
+  // equality, i.e., both the aval and the bval bits have to match.
   if(is_aval_bval(pattern_type))
   {
-    // We are using masking based on the pattern.
-    // The aval is the comparison value, and the
-    // negation of bval is the mask.
     auto pattern_aval = ::aval(pattern);
     auto pattern_bval = ::bval(pattern);
-    auto mask_expr = bitnot_exprt{pattern_bval};
 
-    auto case_operand_casted = typecast_exprt{
-      typecast_exprt::conditional_cast(
-        case_operand, aval_bval_underlying(pattern_type)),
-      mask_expr.type()};
+    auto case_operand_lowered = typecast_exprt::conditional_cast(
+      case_operand, aval_bval_underlying(pattern_type));
+    auto operand_aval =
+      typecast_exprt{::aval(case_operand_lowered), pattern_aval.type()};
+    auto operand_bval =
+      typecast_exprt{::bval(case_operand_lowered), pattern_bval.type()};
 
-    return equal_exprt{
-      bitand_exprt{case_operand_casted, mask_expr},
-      bitand_exprt{pattern_aval, mask_expr}};
+    // The wildcard bits are ignored in the comparison; keep_mask is
+    // the negation of the wildcard mask, i.e., the bits to compare.
+    exprt keep_mask;
+
+    if(case_type == ID_verilog_casex)
+    {
+      // Any bit with bval=1 (i.e., x or z) is a wildcard.
+      keep_mask = bitnot_exprt{pattern_bval};
+    }
+    else if(case_type == ID_verilog_casez)
+    {
+      // Only z bits (bval=1 and aval=1) are wildcards.
+      keep_mask = bitnot_exprt{bitand_exprt{pattern_bval, pattern_aval}};
+    }
+    else
+    {
+      // Plain case: no wildcards, compare all bits.
+      keep_mask = to_bv_type(pattern_aval.type()).all_ones_expr();
+    }
+
+    // On the compared bits, require 4-state equality: both the aval
+    // and the bval have to match.
+    return and_exprt{
+      equal_exprt{
+        bitand_exprt{operand_aval, keep_mask},
+        bitand_exprt{pattern_aval, keep_mask}},
+      equal_exprt{
+        bitand_exprt{operand_bval, keep_mask},
+        bitand_exprt{pattern_bval, keep_mask}}};
   }
 
   // 2-valued comparison
@@ -2676,6 +2715,7 @@ Function: verilog_synthesist::synth_case_values
 \*******************************************************************/
 
 exprt verilog_synthesist::synth_case_values(
+  irep_idt case_type,
   const exprt &values,
   const exprt &case_operand)
 {
@@ -2689,7 +2729,7 @@ exprt verilog_synthesist::synth_case_values(
   forall_operands(it, values)
   {
     auto pattern = synth_expr(*it, symbol_statet::CURRENT);
-    op.push_back(case_comparison(case_operand, pattern));
+    op.push_back(case_comparison(case_type, case_operand, pattern));
   }
 
   return disjunction(op);
@@ -2743,8 +2783,8 @@ void verilog_synthesist::synth_case(
     {
       exprt if_statement(ID_if);
       if_statement.reserve_operands(3);
-      if_statement.add_to_operands(
-        synth_case_values(case_item.case_value(), case_operand));
+      if_statement.add_to_operands(synth_case_values(
+        statement.id(), case_item.case_value(), case_operand));
       if_statement.add_to_operands(case_item.case_statement());
 
       last_if->add_to_operands(std::move(if_statement));
