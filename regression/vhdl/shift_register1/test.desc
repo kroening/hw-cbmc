@@ -1,11 +1,9 @@
-KNOWNBUG
+CORE
 shift_register1.vhd
---bound 6
+--bound 7
 ^EXIT=10$
 ^SIGNAL=0$
-^\[shift_register1\.p1\] .* PROVED up to bound 6$
+^\[shift_register1\.p1\] .* PROVED up to bound 7$
 ^\[shift_register1\.p2\] .* REFUTED$
 --
 ^warning: ignoring
---
-Nothing is implemented yet.

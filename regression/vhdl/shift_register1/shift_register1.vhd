@@ -26,10 +26,10 @@ begin
 
   dout <= sr(7);
 
-  -- the top bit stays zero for the first seven cycles
+  -- the top bit stays zero for the first eight cycles
   p1: assert sr(7) = '0';
 
-  -- the top two bits do not; bit 6 is reached after six cycles
+  -- the top two bits do not; bit 6 is reached after seven cycles
   p2: assert sr(7 downto 6) = "00";
 
 end rtl;

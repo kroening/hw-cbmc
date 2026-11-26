@@ -652,10 +652,10 @@ bit_string_bits(const std::string &literal)
 static constant_exprt
 bits_to_constant(const std::vector<bool> &bits, const typet &type)
 {
-  std::string binary;
+  mp_integer value = 0;
   for(bool b : bits)
-    binary += b ? '1' : '0';
-  return constant_exprt{binary, type};
+    value = value * 2 + (b ? 1 : 0);
+  return from_integer(value, type);
 }
 
 /// IEEE 1076-2008 9.3.3: aggregates

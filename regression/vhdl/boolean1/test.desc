@@ -1,4 +1,4 @@
-KNOWNBUG
+CORE
 boolean1.vhd
 --bound 1
 ^EXIT=0$
@@ -9,5 +9,3 @@ boolean1.vhd
 --
 ^warning: ignoring
 ^REFUTED
---
-Nothing is implemented yet.
