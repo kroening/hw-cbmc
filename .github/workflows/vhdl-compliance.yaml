@@ -1,0 +1,55 @@
+name: VHDL compliance tests
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'src/vhdl/**'
+      - 'regression/vhdl-compliance/**'
+      - '.github/workflows/vhdl-compliance.yaml'
+
+jobs:
+  vests-vhdl-93:
+    name: VESTs VHDL-93 (parser)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Fetch dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo apt-get remove --purge man-db
+          packages_to_install="ccache"
+          if ! sudo apt-get install --no-install-recommends -yq $packages_to_install ; then
+            sudo apt-get update
+            sudo apt-get install --no-install-recommends -yq $packages_to_install
+          fi
+      - name: Prepare ccache
+        uses: actions/cache/restore@v6
+        with:
+          path: .ccache
+          key: ${{ runner.os }}-24.04-make-gcc-${{ github.ref }}-${{ github.sha }}-PR
+          restore-keys: |
+            ${{ runner.os }}-24.04-make-gcc-${{ github.ref }}
+            ${{ runner.os }}-24.04-make-gcc
+      - name: ccache environment
+        run: |
+          echo "CCACHE_BASEDIR=$PWD" >> $GITHUB_ENV
+          echo "CCACHE_DIR=$PWD/.ccache" >> $GITHUB_ENV
+      - name: Zero ccache stats and limit in size
+        run: ccache -z --max-size=500M
+      - name: Get cadical and minisat
+        run: make -C lib/cbmc/src cadical-download minisat2-download
+      - name: Build with make
+        run: make -C src -j4 CXX="ccache g++" MINISAT2=../../minisat-2.2.1 CADICAL=../../cadical
+      - name: Fetch VESTs
+        run: |
+          git clone --depth 1 --filter=blob:none --sparse https://github.com/ghdl/ghdl.git /tmp/ghdl-vests
+          git -C /tmp/ghdl-vests sparse-checkout set testsuite/vests/vhdl-93
+      - name: Run the VESTs VHDL-93 compliance tests
+        run: make -C regression/vhdl-compliance test
+      - name: Print ccache stats
+        run: ccache -s
