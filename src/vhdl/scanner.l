@@ -20,8 +20,22 @@ static int isatty(int) { return 0; }
 #include "vhdl_parser.h"
 #include "vhdl_y.tab.h"
 
+// We wrap the scanner to remember the previous token. This is
+// needed to tell apart a character literal from the tick of an
+// attribute name or a qualified expression, e.g. in std_logic'('1').
+static int yyvhdllex_token();
+#define YY_DECL static int yyvhdllex_token()
+
+int yyvhdllex()
+{
+  int token = yyvhdllex_token();
+  PARSER.last_token = token;
+  return token;
+}
+
 void vhdl_scanner_init()
 {
+  PARSER.last_token = 0;
 }
 
 %}
@@ -61,6 +75,7 @@ void vhdl_scanner_init()
 "<<"            { set_loc(); return TOK_LEFT_LABEL_BRACKET; }
 ">>"            { set_loc(); return TOK_RIGHT_LABEL_BRACKET; }
 "<>"            { set_loc(); return TOK_BOX; }
+"??"            { set_loc(); return TOK_CONDITION; }
 
 [ \n\r\t] { /* eat */ }
 
@@ -83,7 +98,8 @@ void vhdl_scanner_init()
 "COMPONENT"     { set_loc(); return TOK_COMPONENT; }
 "CONFIGURATION" { set_loc(); return TOK_CONFIGURATION; }
 "CONSTANT"      { set_loc(); return TOK_CONSTANT; }
-"DISCONNENT"    { set_loc(); return TOK_DISCONNENT; }
+"CONTEXT"       { set_loc(); return TOK_CONTEXT; }
+"DISCONNECT"    { set_loc(); return TOK_DISCONNECT; }
 "DOWNTO"        { set_loc(); return TOK_DOWNTO; }
 "ELSE"          { set_loc(); return TOK_ELSE; }
 "ELSIF"         { set_loc(); return TOK_ELSIF; }
@@ -140,6 +156,7 @@ void vhdl_scanner_init()
 "ROR"           { set_loc(); return TOK_ROR; }
 "SELECT"        { set_loc(); return TOK_SELECT; }
 "SEVERITY"      { set_loc(); return TOK_SEVERITY; }
+"SHARED"        { set_loc(); return TOK_SHARED; }
 "SIGNAL"        { set_loc(); return TOK_SIGNAL; }
 "SLA"           { set_loc(); return TOK_SLA; }
 "SLL"           { set_loc(); return TOK_SLL; }
@@ -175,18 +192,29 @@ void vhdl_scanner_init()
 }
 
 \'.\' { 
+  // A tick following an identifier or a closing parenthesis is
+  // an attribute or qualified expression, not a character literal
+  // (IEEE 1076-2008 15.6).
+  if(PARSER.last_token == TOK_IDENTIFIER || PARSER.last_token == ')')
+  {
+    yyless(1);
+    set_loc();
+    return '\'';
+  }
+
   set_loc();
   yyvhdllval.text=std::string(yytext, 1, 1);
   return TOK_CHAR;
 }
 
-#[0-9a-f]*# {
+[0-9][0-9_]*#[0-9a-fA-F_]+(\.[0-9a-fA-F_]+)?#([eE][+-]?[0-9_]+)? {
+  // based literal, IEEE 1076-2008 15.5.3
   set_loc();
   yyvhdllval.text=yytext;
   return TOK_BASED_INTEGER;
 }
 
-[a-zA-Z_$][a-zA-Z0-9_$]* {
+[a-zA-Z][a-zA-Z0-9_]* {
   set_loc();
   yyvhdllval.text=yytext;
   return TOK_IDENTIFIER;
@@ -198,7 +226,15 @@ void vhdl_scanner_init()
   PARSER.scanner_buffer.clear();
 }
 
-[0-9]+ { 
+[0-9][0-9_]*\.[0-9][0-9_]*([eE][+-]?[0-9][0-9_]*)? {
+  // decimal literal with a point, IEEE 1076-2008 15.5.2
+  set_loc();
+  yyvhdllval.text=yytext;
+  return TOK_REAL;
+}
+
+[0-9][0-9_]*([eE]\+?[0-9][0-9_]*)? {
+  // decimal literal without a point, IEEE 1076-2008 15.5.2
   set_loc();
   yyvhdllval.text=yytext;
   return TOK_NATURAL;

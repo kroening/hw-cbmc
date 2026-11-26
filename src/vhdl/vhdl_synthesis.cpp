@@ -33,12 +33,17 @@ void vhdl_synthesist::synth_code(const codet &code)
   if(statement==ID_assign)
   {
   }
-  else if(statement==ID_continuous_assign)
+  else if(statement == ID_vhdl_signal_assign)
   {
+  }
+  else if(statement == ID_block)
+  {
+    for(auto &op : code.operands())
+      synth_code(to_code(op));
   }
   else if(statement==ID_assert)
   {
-    DATA_INVARIANT(code.operands().size() == 3, "assert has three operands");
+    DATA_INVARIANT(code.operands().size() == 1, "assert has one operand");
 
     // There is an implicit 'always'
     exprt property = AG_exprt(code.op0());
@@ -57,10 +62,11 @@ void vhdl_synthesist::synth_code(const codet &code)
     new_symbol.pretty_name=
       id2string(module_symbol->pretty_name)+"."+id2string(new_symbol.base_name);
 
-    if(code.op1().id()==ID_constant &&
-       code.op1().type().id()==ID_string)
+    auto &report = static_cast<const exprt &>(code.find(ID_report));
+
+    if(report.id() == ID_constant && report.type().id() == ID_string)
     {
-      const constant_exprt &constant_expr=to_constant_expr(code.op1());
+      const constant_exprt &constant_expr = to_constant_expr(report);
       new_symbol.location.set_comment("assertion "+id2string(constant_expr.get_value()));
     }
     
@@ -123,8 +129,8 @@ Function: vhdl_synthesist::synth_process
 
 void vhdl_synthesist::synth_process(const exprt &process)
 {
-  for(auto & op : process.operands())
-    synth_code(to_code(op));
+  // the body of the process is operand 0
+  synth_code(to_code(to_unary_expr(process).op()));
 }
 
 /*******************************************************************\

@@ -73,7 +73,7 @@ void vhdl_typecheckt::typecheck_architecture_decl(irept &decl)
       typet &type=static_cast<typet &>(d.add(ID_type));
       typecheck_type(type);
 
-      for(auto & s : d.get_sub())
+      for(auto &s : d.find(ID_declarators).get_sub())
       {
         symbolt new_symbol;
 
@@ -223,31 +223,28 @@ Function: vhdl_typecheckt::typecheck_code_assert
 
 void vhdl_typecheckt::typecheck_code_assert(codet &code)
 {
-  PRECONDITION(code.operands().size() == 3);
+  PRECONDITION(code.operands().size() == 1);
 
   // op0 is the assertion
   typecheck_expr(code.op0());
   convert_to_type(code.op0(), bool_typet());
 
-  // op1 must be a string (the report) or nil
-  if(code.op1().is_nil())
+  // the report must be a string or nil
+  auto &report = static_cast<const exprt &>(code.find(ID_report));
+
+  if(report.is_nil())
   {
   }
-  else if(code.op1().id()==ID_constant &&
-          code.op1().type().id()==ID_string)
+  else if(report.id() == ID_constant && report.type().id() == ID_string)
   {
   }
   else
   {
-    //message_location(code.op1());
     error() << "report clause expects string argument" << eom;
     throw 0;
   }
 
-  // op2 is the severity level or nil
-  if(code.op2().is_nil())
-  {
-  }
+  // the severity level is ignored
 }
 
 /*******************************************************************\
@@ -283,9 +280,20 @@ Function: vhdl_typecheckt::typecheck_type
 
 void vhdl_typecheckt::typecheck_type(typet &type)
 {
-  if(type.id()==ID_symbol)
+  if(type.id() == ID_vhdl_subtype_indication)
   {
-    const irep_idt identifier=to_lower(type.get(ID_identifier));
+    // we only do unconstrained type marks for now
+    auto &name = static_cast<const exprt &>(type.find(ID_name));
+
+    if(
+      name.id() != ID_symbol || type.find(ID_range_constraint).is_not_nil() ||
+      type.find(ID_index_constraint).is_not_nil())
+    {
+      error() << "unsupported subtype indication" << eom;
+      throw 0;
+    }
+
+    const irep_idt identifier = to_lower(name.get(ID_identifier));
     if(identifier=="boolean")
     {
       source_locationt source_location=type.source_location();
@@ -294,8 +302,7 @@ void vhdl_typecheckt::typecheck_type(typet &type)
     }
     else
     {
-      error() << "unknown type `"
-              << type.get(ID_identifier) << "'" << eom;
+      error() << "unknown type `" << name.get(ID_identifier) << "'" << eom;
       throw 0;
     }
   }
@@ -318,6 +325,24 @@ Function: vhdl_typecheckt::typecheck_code
 
 \*******************************************************************/
 
+/// The parser produces statements as expressions with the statement
+/// as id; this turns them into codet, recursively.
+static codet &make_code(exprt &expr)
+{
+  if(expr.id() != ID_code)
+  {
+    irep_idt statement = expr.id();
+    expr.id(ID_code);
+    expr.set(ID_statement, statement);
+
+    if(statement == ID_block)
+      for(auto &op : expr.operands())
+        make_code(op);
+  }
+
+  return to_code(expr);
+}
+
 void vhdl_typecheckt::typecheck_code(codet &code)
 {
   irep_idt statement=code.get_statement();
@@ -326,11 +351,16 @@ void vhdl_typecheckt::typecheck_code(codet &code)
     typecheck_code_assert(code);
   else if(statement==ID_assign)
     typecheck_code_assign(code);
-  else if(statement==ID_continuous_assign)
+  else if(statement == ID_vhdl_signal_assign)
   {
     typecheck_expr(code.op0());
     typecheck_expr(code.op1());
     convert_to_type(code.op1(), code.op0().type());
+  }
+  else if(statement == ID_block)
+  {
+    for(auto &op : code.operands())
+      typecheck_code(to_code(op));
   }
   else
     throw "unexpected statement: "+id2string(statement);
@@ -354,10 +384,8 @@ void vhdl_typecheckt::typecheck_architecture_body(exprt &body)
   {
     if(it.id()==ID_process)
     {
-      for(auto & it2 : it.operands())
-      {
-        typecheck_code(to_code(it2));
-      }
+      // the body of the process is operand 0
+      typecheck_code(make_code(to_unary_expr(it).op()));
     }
     else if(it.id()==ID_generate_if)
     {
@@ -367,9 +395,9 @@ void vhdl_typecheckt::typecheck_architecture_body(exprt &body)
     {
       throw "generate_for yet to be impleneted";
     }
-    else if(it.id()==ID_continuous_assign)
+    else if(it.id() == ID_vhdl_signal_assign)
     {
-      throw "continous assignment yet to be implemented";
+      throw "concurrent signal assignment yet to be implemented";
     }
     else
       throw "unexpected item in architecture body: "+it.id_string();
@@ -417,7 +445,11 @@ void vhdl_typecheckt::typecheck_architecture(
 
   irept entity=item.find(ID_entity);
   irept decl=item.find(ID_decl);
-  exprt body=static_cast<const exprt &>(item.find(ID_body));
+
+  // the concurrent statements are the operands of the body
+  exprt body(ID_body);
+  for(auto &statement : item.find(ID_body).get_sub())
+    body.add_to_operands(static_cast<const exprt &>(statement));
 
   typecheck_architecture_entity(entity);
   typecheck_architecture_decl(decl);
