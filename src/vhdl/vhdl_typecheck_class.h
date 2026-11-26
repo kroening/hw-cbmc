@@ -6,25 +6,35 @@ Author: Daniel Kroening, kroening@kroening.com
 
 \*******************************************************************/
 
-#ifndef CPROVER_VHDL_TYPECHECK_CLASS_H
-#define CPROVER_VHDL_TYPECHECK_CLASS_H
+#ifndef CPROVER_VHDL_VHDL_TYPECHECK_CLASS_H
+#define CPROVER_VHDL_VHDL_TYPECHECK_CLASS_H
 
-#include <util/typecheck.h>
 #include <util/namespace.h>
+#include <util/std_code.h>
+#include <util/std_expr.h>
+#include <util/symbol_table_base.h>
+#include <util/typecheck.h>
 
-/*******************************************************************\
+#include "vhdl_parse_tree.h"
+#include "vhdl_types.h"
 
-   Class: vhdl_typecheckt
+#include <map>
+#include <vector>
 
-  Inputs:
-
- Outputs:
-
- Purpose:
-
-\*******************************************************************/
-
-class vhdl_typecheckt:public messaget
+/// Type checking of the architecture for one entity.
+///
+/// The result is a module symbol whose value has
+/// * `ID_body`, the concurrent statements, type checked;
+///
+/// and symbols for the ports, signals and process variables of the
+/// design. Constants are inlined, and enumeration literals are
+/// turned into constants of the enumeration type.
+///
+/// Statements are turned into codet. Names are resolved into
+/// symbol expressions, indexed names into extractbit/extractbits/index
+/// expressions, and the clock edge expressions clk'event and
+/// rising_edge(clk) into vhdl_event and vhdl_rising_edge.
+class vhdl_typecheckt : public typecheckt
 {
 public:
   vhdl_typecheckt(
@@ -32,7 +42,7 @@ public:
     const irep_idt &_module_name,
     symbol_table_baset &_symbol_table,
     message_handlert &_message_handler)
-    : messaget(_message_handler),
+    : typecheckt(_message_handler),
       ns(_symbol_table),
       parse_tree(_parse_tree),
       module_name(_module_name),
@@ -40,160 +50,125 @@ public:
   {
   }
 
-  bool operator()();
+  void typecheck() override;
 
 protected:
   const namespacet ns;
   const vhdl_parse_treet &parse_tree;
   const irep_idt &module_name;
-  symbolt *module_symbol;
+  symbolt *module_symbol = nullptr;
   symbol_table_baset &symbol_table;
 
-  void typecheck_architecture(
-    const vhdl_parse_treet::itemt &);
-  
-  void typecheck_architecture_entity(irept &);
-  void typecheck_architecture_decl(irept &);
-  void typecheck_architecture_body(exprt &);
-  void typecheck_code(class codet &);
-  void typecheck_code_assert(class codet &);
-  void typecheck_code_assign(class codet &);
-  void typecheck_expr(exprt &);
-  void typecheck_type(typet &);
-  void convert_to_type(exprt &, const typet &);
-  
-  #if 0
-  // instances
-  irep_idt parameterize_module(
-    const source_locationt &location,
-    const irep_idt &module_identifier,
-    const exprt::operandst &parameter_assignment);
+  // design units
+  void typecheck_architecture(const vhdl_parse_treet::itemt &);
+  void typecheck_entity(const vhdl_parse_treet::itemt &);
+  void typecheck_package(const vhdl_parse_treet::itemt &);
 
-  void get_parameter_values(
-    const irept &module_source,
-    const exprt::operandst &parameter_assignment,
-    expr_listt &parameter_values);
+  // declarations
+  void typecheck_interface_list(const irept &, bool is_generic);
+  void typecheck_declarations(const irept &decl);
+  void typecheck_declaration(const irept &decl);
+  void typecheck_object_declaration(const irept &decl);
+  void typecheck_type_declaration(const irept &decl);
+  void typecheck_subtype_declaration(const irept &decl);
 
-  void set_parameter_values(
-    irept &module_source,
-    const expr_listt &parameter_values);
+  // concurrent statements
+  exprt typecheck_concurrent_statements(const irept &);
+  exprt typecheck_concurrent_statement(exprt);
+  exprt typecheck_process(exprt);
 
-  // interfaces
-  void module_interface();
-  void interface_ports(irept::subt &ports);
-  void interface_module_decl(const class vhdl_declt &decl);
-  void interface_function_or_task_decl(const class vhdl_declt &decl);
-  void interface_parameter(const exprt &expr);
-  void interface_parameter_decl(const exprt &statement);
-  void interface_inst(const class vhdl_module_itemt &statement);
-  void interface_inst(const class vhdl_module_itemt &statement, const exprt &op);
-  void interface_module_item(const class vhdl_module_itemt &module_item);
-  void interface_block(const class vhdl_blockt &statement);
-  void interface_statement(const class vhdl_statementt &statement);
-  void interface_function_or_task(const class vhdl_declt &decl);
+  // sequential statements
+  codet typecheck_code(exprt);
+  codet typecheck_block(exprt);
+  codet typecheck_assert(exprt);
+  codet typecheck_assign(exprt, bool is_signal);
+  codet typecheck_selected_assign(exprt, bool is_signal);
+  codet typecheck_if(exprt);
+  codet typecheck_case(exprt);
+  codet typecheck_for(exprt);
 
-  array_typet array_type(
-    const irept &src,
-    const typet &element_type);
+  /// turn a case statement into nested if statements
+  exprt case_condition(const exprt &selector, const irept &choices);
 
-  // type checking
-  
-  typedef enum { A_CONTINUOUS, A_BLOCKING, A_NON_BLOCKING } vassignt;
+  // types
+  typet typecheck_type(const typet &);
+  typet typecheck_subtype_indication(const typet &);
+  typet typecheck_type_mark(const exprt &name);
+  vhdl_ranget typecheck_range(const exprt &);
+  mp_integer typecheck_static_integer(const exprt &);
 
-  // statements
-  void convert_statement(class vhdl_statementt &statement);
-  void convert_function_call_or_task_enable(class vhdl_function_callt &statement);
-  void convert_block(class vhdl_blockt &statement);
-  void convert_case(class vhdl_case_baset &statement);
-  void convert_if(class vhdl_ift &statement);
-  void convert_event_guard(class vhdl_event_guardt &statement);
-  void convert_delay(class vhdl_delayt &statement);
-  void convert_for(class vhdl_fort &statement);
-  void convert_forever(class vhdl_forevert &statement);
-  void convert_while(class vhdl_whilet &statement);
-  void convert_repeat(class vhdl_repeatt &statement);
-  void convert_assign(class vhdl_assignt &statement, bool blocking);
-  void convert_procedural_continuous_assign(
-    class vhdl_procedural_continuous_assignt &statement);
-  void convert_prepostincdec(class vhdl_statementt &statement);
-  
-  // module items
-  void convert_decl(class vhdl_declt &module_item);
-  void convert_function_or_task(class vhdl_declt &decl);
-  void convert_inst(class vhdl_instt &module_item);
-  void convert_inst_builtin(class vhdl_inst_builtint &module_item);
-  void convert_always(class vhdl_alwayst &module_item);
-  void convert_initial(class vhdl_initialt &module_item);
-  void convert_continuous_assign(class vhdl_continuous_assignt &module_item);
-  void convert_assert(exprt &statement);
-  void convert_assume(exprt &statement);
-  void check_lhs(const exprt &lhs, vassignt vassign);
-  void convert_assignments(exprt &trans);
-  void convert_module_item(class vhdl_module_itemt &module_item);
+  /// the default initial value of a type (T'left), or nil
+  exprt default_value(const typet &);
 
-  void integer_expr(exprt &expr);
+  // expressions
+  exprt typecheck_expr(exprt);
+  exprt typecheck_expr_rec(exprt);
+  exprt typecheck_symbol(symbol_exprt);
+  exprt typecheck_indexed(exprt);
+  exprt typecheck_slice(exprt);
+  exprt typecheck_attribute(exprt);
+  exprt typecheck_function_call(
+    const irep_idt &name,
+    exprt::operandst arguments,
+    const source_locationt &);
+  exprt typecheck_type_conversion(exprt, const typet &);
+  exprt typecheck_binary(exprt);
+  exprt typecheck_unary(exprt);
+  exprt typecheck_aggregate(exprt, const typet &);
 
-  void convert_case_values(
-    exprt &values,
-    const exprt &case_operand);
+  /// implicit conversion of universal literals, and type matching
+  exprt convert_to(exprt, const typet &);
+  /// make the types of two operands match
+  void match_types(exprt &, exprt &);
 
-  void instantiate_port_connections(
-    const std::string &instance,
-    const exprt &inst,
-    const symbolt &symbol,
-    exprt &trans);
+  /// the bit position of a VHDL index into a vector
+  exprt vector_bit_index(const exprt &index, const typet &vector_type);
 
-  void typecheck_port_connections(
-    exprt &inst,
-    const symbolt &symbol);
-
-  void typecheck_builtin_port_connections(exprt &inst);
-
-  void typecheck_port_connection(
-    exprt &op,
-    const exprt &port);
-
-  bool replace_symbols(const replace_mapt &what, exprt &dest);
-  void replace_symbols(const std::string &target, exprt &dest);
-
-  virtual void convert_statements();
-
-  virtual bool implicit_wire(
-    const irep_idt &identifier,
-    const symbolt *&symbol);
-    
-  // override parameter values
-  typedef std::map<std::string, exprt> overridest;
-  overridest overrides;
-  
-  // generate constructs
-  void elaborate_generate_assign(const exprt &statement, exprt::operandst &dest);
-  void elaborate_generate_block(const exprt &statement, exprt::operandst &dest);
-  void elaborate_generate_item(const exprt &statement, exprt::operandst &dest);
-  void elaborate_generate_if(const exprt &statement, exprt::operandst &dest);
-  void elaborate_generate_case(const exprt &statement, exprt::operandst &dest);
-  void elaborate_generate_for(const exprt &statement, exprt::operandst &dest);
-
-  // generate state
-  typedef std::map<irep_idt, mp_integer> genvarst;
-  genvarst genvars;
-
-  virtual void genvar_value(
-    const irep_idt &identifier,
-    mp_integer &value)
+  // scopes
+  struct scopet
   {
-    genvarst::const_iterator it=genvars.find(identifier);
-    if(it==genvars.end())
-      value=-1;
-    else
-      value=it->second;
+    irep_idt prefix;                          // for new symbols
+    std::map<irep_idt, irep_idt> identifiers; // lower-case base name -> symbol
+    std::map<irep_idt, typet> types;
+    std::map<irep_idt, exprt> constants;
+    std::map<irep_idt, exprt> enumeration_literals;
+  };
+
+  std::vector<scopet> scopes;
+
+  void push_scope(const irep_idt &prefix)
+  {
+    scopes.push_back(scopet{prefix, {}, {}, {}, {}});
   }
-  
-  // counter for assertions
-  unsigned assertion_counter;
-  #endif
-  
+
+  void pop_scope()
+  {
+    scopes.pop_back();
+  }
+
+  scopet &current_scope()
+  {
+    return scopes.back();
+  }
+
+  /// lower-case identifier
   static irep_idt to_lower(const irep_idt &);
+
+  const typet *lookup_type(const irep_idt &lower_case_name) const;
+  const exprt *lookup_constant(const irep_idt &lower_case_name) const;
+  const exprt *
+  lookup_enumeration_literal(const irep_idt &lower_case_name) const;
+  const symbolt *lookup_object(const irep_idt &lower_case_name) const;
+
+  /// add a symbol for an object, in the current scope
+  symbolt &add_object(
+    const irep_idt &base_name,
+    const typet &,
+    const source_locationt &);
+
+  void add_predefined_types();
+
+  unsigned process_counter = 0;
 };
 
 #endif

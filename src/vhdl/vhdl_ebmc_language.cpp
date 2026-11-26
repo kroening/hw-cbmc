@@ -160,16 +160,16 @@ std::optional<transition_systemt> vhdl_ebmc_languaget::transition_system()
     throw ebmc_errort{}.with_exit_code(2);
   }
 
-  if(vhdl_synthesis(result.symbol_table, module_identifier, message_handler))
-  {
-    message.error() << "CONVERSION ERROR" << messaget::eom;
-    throw ebmc_errort{}.with_exit_code(2);
-  }
-
   if(cmdline.isset("show-symbol-table"))
   {
     std::cout << result.symbol_table;
     return {};
+  }
+
+  if(vhdl_synthesis(result.symbol_table, module_identifier, message_handler))
+  {
+    message.error() << "CONVERSION ERROR" << messaget::eom;
+    throw ebmc_errort{}.with_exit_code(2);
   }
 
   result.main_symbol =

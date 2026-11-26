@@ -2024,7 +2024,7 @@ expr:
        | expr TOK_DOUBLE_STAR expr { binary($$, $1, $2, $3, ID_power); }
        | expr TOK_SLL expr { binary($$, $1, $2, $3, ID_shl); }
        | expr TOK_SRL expr { binary($$, $1, $2, $3, ID_lshr); }
-       | expr TOK_SLA expr { binary($$, $1, $2, $3, ID_shl); }
+       | expr TOK_SLA expr { binary($$, $1, $2, $3, ID_shl); stack($$).set(ID_vhdl_sla, true); }
        | expr TOK_SRA expr { binary($$, $1, $2, $3, ID_ashr); }
        | expr TOK_ROL expr { binary($$, $1, $2, $3, ID_rol); }
        | expr TOK_ROR expr { binary($$, $1, $2, $3, ID_ror); }
